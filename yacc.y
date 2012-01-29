@@ -14,11 +14,12 @@ IF THEN ELSE
 NUMBER MATHOP
 OBRACE CBRACE
 EQUALOP ASSIGNOP
+DOT
 
 %%
 
 program		: /* empty program */
-		| header variables;
+		| header variables BEGINN END DOT;
 
 header		: PROGRAM IDENTIFIER SEMICOLON;
 

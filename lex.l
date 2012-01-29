@@ -6,12 +6,8 @@ using namespace std;
 %option noyywrap
 
 %%
-(\{([^}]|[\r\n])*\})		{} /* matches {} comments */
-\(\*([^*]|(\*+[^*\)]))*\*+\)    {} /* matches (* *) comments */
-\/\*([^*]|(\*+[^*\/]))*\*+\/    {} /* mathes this comments */
-(\/\/.*)			{} /* matches // comments */
-(begin|BEGIN)			{return BEGINN;}
-(END\.|end\.)			{return END;}
+(BEGIN|begin)			{return BEGINN;}
+(END|end)			{return END;}
 (PROGRAM|program)	 	{return PROGRAM;}
 (IF|if)				{return IF;}
 (THEN|then)			{return THEN;}
@@ -33,6 +29,11 @@ char				{return CHAR;}
 ,				{return COMMA;}
 =				{return EQUALOP;}
 :=				{return ASSIGNOP;}
-[ \t]+ 				{}
+\.				{return DOT;}
+[ \t]+ 				{}	/* ignore whitespace */
+\{([^}]|[\r\n])*\}		{}	/* matches {} comments */
+\(\*([^*]|(\*+[^*\)]))*\*+\)    {}	/* matches (* *) comments */
+\/\/.*				{}	/* matches // comments */
+\/\*([^*]|(\*+[^*\/]))*\*+\/    {}	/* matches this comments */
 
 %%
