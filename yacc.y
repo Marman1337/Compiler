@@ -4,9 +4,16 @@
 using namespace std;
 
 int yylex();
-extern void yyerror(char *);
+extern void yyerror(char const *);
 %}
-%token PROGRAM IDENTIFIER SEMICOLON VAR COLON COMMA INT SHORTINT LONGINT BOOLEAN BEGINN END IF THEN ELSE BYTE CHAR NUMBER MATHOP OBRACE CBRACE EQUALOP ASSIGNOP
+%token PROGRAM IDENTIFIER VAR
+SEMICOLON COLON COMMA
+INT SHORTINT LONGINT BOOLEAN BYTE CHAR
+BEGINN END
+IF THEN ELSE
+NUMBER MATHOP
+OBRACE CBRACE
+EQUALOP ASSIGNOP
 
 %%
 
@@ -23,7 +30,9 @@ var_identifiers	: IDENTIFIER
 var_type	: INT
 		| SHORTINT
 		| LONGINT
-		| BOOLEAN;
+		| BOOLEAN
+		| BYTE
+		| CHAR;
 
 %%
 int main()
@@ -31,7 +40,7 @@ int main()
 	yyparse();
 }
 
-void yyerror(char *s)
+void yyerror(char const *s)
 {
 	cout << "error" << endl;
 }
