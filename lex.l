@@ -36,4 +36,3 @@ char				{return CHAR;}
 [ \t]+ 				{}
 
 %%
-

@@ -1,2 +1,2 @@
 program owned;
-var jeden, dwa, trzy : boolean;
+var piec, dwa, debiec : boolean;
