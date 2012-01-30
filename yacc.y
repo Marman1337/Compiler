@@ -45,5 +45,5 @@ int main()
 
 void yyerror(char const *s)
 {
-	cout << "error " << yylineno << endl;
+	cout << "error" << yylineno << endl;
 }
