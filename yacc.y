@@ -4,8 +4,10 @@
 using namespace std;
 
 int yylex();
-extern void yyerror(char const *);
+void yyerror(char const *);
+extern int yylineno;
 %}
+
 %token PROGRAM IDENTIFIER VAR
 SEMICOLON COLON COMMA
 INT SHORTINT LONGINT BOOLEAN BYTE CHAR
@@ -43,5 +45,5 @@ int main()
 
 void yyerror(char const *s)
 {
-	cout << "error" << endl;
+	cout << "error " << yylineno << endl;
 }

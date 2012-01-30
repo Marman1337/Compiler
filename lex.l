@@ -3,6 +3,7 @@
 #include "yacc.tab.h"
 using namespace std;
 %}
+%option yylineno
 %option noyywrap
 
 %%

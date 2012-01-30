@@ -1,7 +1,7 @@
-program owned; //beginning of program
-var piec, dwa, debiec : boolean; (* tutaj
+program owned;
+var piec, dwa;, debiec : boolean; (* tutaj
 jakies komentarze *)
-BEGIN
+BEGIN;
 {
 dalsze komentarze
 }
