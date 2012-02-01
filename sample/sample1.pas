@@ -1,9 +1,10 @@
 program sample1;
-var 	A,B : integer;
-	C,D : boolean;
+var 	pierwsza, druga : integer;
+	trzecia, czwarta : boolean;
+	piata, szosta : shortint;
 begin
-	A := 1;
-	B := 2;
-	C := 4;
-   	write(A);
+	A := 2;
+	B := 2-4;
+	C := 4-3+2+5-4;
+
 end.

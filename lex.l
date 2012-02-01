@@ -22,8 +22,8 @@ int lineno = 1;
 (BYTE|byte)			{return BYTE;}
 (BOOLEAN|boolean)		{return BOOLEAN;}
 (CHAR|char)			{return CHAR;}
-[a-zA-Z][a-zA-Z0-9]*		{return IDENTIFIER;}
-[0-9]+				{return NUMBER;}
+[a-zA-Z][a-zA-Z0-9]*		{char *res = new char[strlen(yytext)+1]; strcpy(res,yytext); yylval.sval = res; return IDENTIFIER;}
+[0-9]+				{yylval.ival = atoi(yytext); return NUMBER;}
 \+				{return PLUS;}
 -				{return MINUS;}
 \*				{return MUL;}

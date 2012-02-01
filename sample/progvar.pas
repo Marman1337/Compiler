@@ -1,22 +1,9 @@
 program owned;
-var piec,  dwa,(* sddsf
-*) debiec
-(* 
-dsfsdf
-*) :
-// sadsadsadasd
-{
-klaun
-}
- INTEGER;
-
-(*
-ssadasd*)
+var 	piec,  dwa, debiec : INTEGER;
+	jeden, osiem, el : BOOLEAN;
+	blog, dwa, siedem : CHAR;
 
 BEGIN
-{fghjk
-}
 
-fghjkl
 
 END.
