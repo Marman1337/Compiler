@@ -1,4 +1,22 @@
 program owned;
-var piec, dwa, debiec : boolean;
+var piec,  dwa,(* sddsf
+*) debiec
+(* 
+dsfsdf
+*) :
+// sadsadsadasd
+{
+klaun
+}
+ INTEGER;
+
+(*
+ssadasd*)
+
 BEGIN
-END ;.
+{fghjk
+}
+
+fghjkl
+
+END.

@@ -5,23 +5,17 @@ using namespace std;
 
 int yylex();
 void yyerror(char const *);
-extern int yylineno;
+extern int lineno;
 %}
 
-%token PROGRAM IDENTIFIER VAR
-SEMICOLON COLON COMMA
-INT SHORTINT LONGINT BOOLEAN BYTE CHAR
-BEGINN END
-IF THEN ELSE
-NUMBER MATHOP
-OBRACE CBRACE
-EQUALOP ASSIGNOP
-DOT
+%token PBEGIN END PROGRAM IF THEN ELSE VAR SHORTINT INT LONGINT BYTE
+BOOLEAN CHAR IDENTIFIER NUMBER PLUS MINUS MUL DIV OBRACE CBRACE
+SEMICOLON COLON COMMA EQUALOP ASSIGNOP DOT
 
 %%
 
 program		: /* empty program */
-		| header variables BEGINN END DOT;
+		| header variables PBEGIN END DOT;
 
 header		: PROGRAM IDENTIFIER SEMICOLON;
 
@@ -45,5 +39,5 @@ int main()
 
 void yyerror(char const *s)
 {
-	cout << "error" << yylineno << endl;
+	cout << "error " << lineno << endl;
 }
