@@ -26,11 +26,12 @@ SEMICOLON COLON COMMA EQUALOP ASSIGNOP DOT
 %%
 
 program			: /* empty program */
-			| program_header var_declarations block DOT;
+			| program_header var_declarations block DOT {cout << "\nEND\n";}
 
-program_header		: PROGRAM IDENTIFIER SEMICOLON {cout << "Nazwa programu: " << $2 << endl; delete $2};
+program_header		: PROGRAM IDENTIFIER SEMICOLON {cout << "AREA " << $2 << ",CODE,READWRITE\n\nENTRY\n\n"; delete $2};
 
-var_declarations	: VAR var_list {cout << "Zadeklarowane zmienne: "; for(int i = 0; i < var_index; i++) cout << variables[i] << " "; cout << endl;};
+var_declarations	: VAR var_list {for(int i = 0; i < var_index; i++) 
+						cout << "\tMOV R" << i << ", #0x" << i << "\n";};
 
 var_list		: var_list single_var_list
 			| single_var_list;
@@ -72,5 +73,5 @@ int main()
 
 void yyerror(char const *s)
 {
-	cout << "error " << lineno << endl;
+	cout << "Error: " << s << ", line: " << lineno << endl;
 }
