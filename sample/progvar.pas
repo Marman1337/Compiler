@@ -1,9 +1,8 @@
 program owned;
 var 	piec,  dwa, debiec : INTEGER;
-	jeden, osiem, el : BOOLEAN;
-	blog, dwa, siedem : CHAR;
 
 BEGIN
-
-
+	piec := 2;
+	dwa := 2+2;
+	debiec := 2+dwa-piec;
 END.

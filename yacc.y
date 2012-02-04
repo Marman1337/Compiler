@@ -6,14 +6,11 @@ using namespace std;
 int yylex();
 void yyerror(char const *);
 extern int lineno;
-
-char* variables[10];
-int var_index = 0;
 %}
 
-%token PBEGIN END PROGRAM IF THEN ELSE VAR SHORTINT INT LONGINT BYTE
-BOOLEAN CHAR PLUS MINUS MUL DIV OBRACE CBRACE
-SEMICOLON COLON COMMA EQUALOP ASSIGNOP DOT
+%token PBEGIN END PROGRAM IF THEN ELSE VAR INT
+PLUS MINUS MUL DIV LT GT LE GE NE
+OPAREN CPAREN SEMICOLON COLON COMMA EQUALOP ASSIGNOP DOT
 
 %union
 {
@@ -30,23 +27,14 @@ program			: /* empty program */
 
 program_header		: PROGRAM IDENTIFIER SEMICOLON {cout << "AREA " << $2 << ",CODE,READWRITE\n\nENTRY\n\n"; delete $2};
 
-var_declarations	: VAR var_list {for(int i = 0; i < var_index; i++) 
-						cout << "\tMOV R" << i << ", #0x" << i << "\n";};
+var_declarations	: VAR var_list;
 
-var_list		: var_list single_var_list
-			| single_var_list;
+var_list		: var_identifiers COLON var_type SEMICOLON;
 
-single_var_list		: var_identifiers COLON var_type SEMICOLON;
+var_identifiers		: IDENTIFIER
+			| var_identifiers COMMA IDENTIFIER;
 
-var_identifiers		: IDENTIFIER {variables[var_index] = $1; var_index++;}
-			| var_identifiers COMMA IDENTIFIER {variables[var_index] = $3; var_index++;};
-
-var_type		: INT
-			| SHORTINT
-			| LONGINT
-			| BOOLEAN
-			| BYTE
-			| CHAR;
+var_type		: INT;
 
 block			: PBEGIN statement_list END;
 
@@ -60,7 +48,8 @@ assignment_statement	: IDENTIFIER ASSIGNOP expression;
 expression		: expression addop term
 			| term;
 
-term			: NUMBER;
+term			: NUMBER
+			| IDENTIFIER;
 
 addop			: PLUS
 			| MINUS;

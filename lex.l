@@ -16,28 +16,29 @@ int lineno = 1;
 (THEN|then)			{return THEN;}
 (ELSE|else)			{return ELSE;}
 (VAR|var)			{return VAR;}
-(SHORTINT|shortint)		{return SHORTINT;}
 (INTEGER|integer)		{return INT;}
-(LONGINT|longint)		{return LONGINT;}
-(BYTE|byte)			{return BYTE;}
-(BOOLEAN|boolean)		{return BOOLEAN;}
-(CHAR|char)			{return CHAR;}
-[a-zA-Z][a-zA-Z0-9]*		{char *res = new char[strlen(yytext)+1]; strcpy(res,yytext); yylval.sval = res; return IDENTIFIER;}
-[0-9]+				{yylval.ival = atoi(yytext); return NUMBER;}
-\+				{return PLUS;}
--				{return MINUS;}
-\*				{return MUL;}
-\/				{return DIV;}
-\(				{return OBRACE;}
-\)				{return CBRACE;}
-;				{return SEMICOLON;}
-:				{return COLON;}
-,				{return COMMA;}
-=				{return EQUALOP;}
-:=				{return ASSIGNOP;}
-\.				{return DOT;}
+"+"				{return PLUS;}
+"-"				{return MINUS;}
+"*"				{return MUL;}
+"/"				{return DIV;}
+"<"				{return LT;}
+">"				{return GT;}
+"<="				{return LE;}
+">="				{return GE;}
+"<>"				{return NE;}
+"("				{return OPAREN;}
+")"				{return CPAREN;}
+";"				{return SEMICOLON;}
+":"				{return COLON;}
+","				{return COMMA;}
+"="				{return EQUALOP;}
+":="				{return ASSIGNOP;}
+"."				{return DOT;}
 [\n\r]				{lineno++;}
 [ \t]+ 				{}			 /* ignore whitespace */
+
+[a-zA-Z][a-zA-Z0-9]*		{char *res = new char[strlen(yytext)+1]; strcpy(res,yytext); yylval.sval = res; return IDENTIFIER;}
+[0-9]+				{yylval.ival = atoi(yytext); return NUMBER;}
 
 "{"				BEGIN(comment1);	 /* matches { ... } comments and counts newlines */
 <comment1>[^}\n\r]*		{}
