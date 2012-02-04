@@ -1,11 +1,15 @@
 %{
 #include <iostream>
+#include <string>
+#include <iomanip>
 #include "yacc.tab.h"
+#include "var_table.h"
 using namespace std;
 
 int yylex();
 void yyerror(char const *);
 extern int lineno;
+Var_table var_table;
 %}
 
 %token PBEGIN END PROGRAM IF THEN ELSE VAR INT
@@ -31,8 +35,8 @@ var_declarations	: VAR var_list;
 
 var_list		: var_identifiers COLON var_type SEMICOLON;
 
-var_identifiers		: IDENTIFIER
-			| var_identifiers COMMA IDENTIFIER;
+var_identifiers		: IDENTIFIER {var_table.addVariable($1);}
+			| var_identifiers COMMA IDENTIFIER {var_table.addVariable($3);};
 
 var_type		: INT;
 
@@ -43,7 +47,18 @@ statement_list		: statement_list statement
 
 statement		: assignment_statement SEMICOLON;
 
-assignment_statement	: IDENTIFIER ASSIGNOP expression;
+assignment_statement	: IDENTIFIER ASSIGNOP expression
+			{
+				var_entry *temp = var_table.lookup($1);
+				if(temp != NULL)
+					temp->initialised = true;
+				else
+				{
+					string temp("Undeclared variable '");
+					temp.append($1); temp.append("'");
+					yyerror(temp.c_str());
+				}
+			}; 
 
 expression		: expression addop term
 			| term;
@@ -58,9 +73,12 @@ addop			: PLUS
 int main()
 {
 	yyparse();
+	//for(int i = 0; i < var_table.table.size(); i++)
+	//	cout << "Variable: " << var_table.table[i]->id << "    Memory: " << hex << var_table.table[i]->location << "   Initialised: " << var_table.table[i]->initialised << endl; 
 }
 
 void yyerror(char const *s)
 {
 	cout << "Error: " << s << ", line: " << lineno << endl;
+	exit(-1);
 }

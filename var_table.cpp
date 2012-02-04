@@ -1,16 +1,8 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <iomanip>
 #include "var_table.h"
 using namespace std;
-
-struct var_entry
-{
-	string id;
-	unsigned long location;
-	bool initialised;
-};
 
 Var_table::Var_table()
 {

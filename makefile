@@ -1,5 +1,5 @@
-comp1: yacc.tab.o lex.yy.o
-	g++ -o comp1 lex.yy.o yacc.tab.o
+comp1: yacc.tab.o lex.yy.o var_table.o
+	g++ -o comp1 lex.yy.o yacc.tab.o var_table.o
 
 yacc.tab.o: yacc.tab.cpp
 	g++ -c yacc.tab.cpp
@@ -18,8 +18,12 @@ yacc.tab.cpp: yacc.y
 	rm yacc.output
 	mv yacc.tab.c yacc.tab.cpp
 
+var_table.o: var_table.cpp var_table.h
+	g++ -c var_table.cpp var_table.h
+	rm var_table.h.gch
+
 clean:
-	rm -f lex.yy.cpp yacc.tab.h yacc.tab.cpp lex.yy.o yacc.tab.o comp1
+	rm -f lex.yy.cpp yacc.tab.h yacc.tab.cpp lex.yy.o yacc.tab.o var_table.o comp1
 
 sweep:
-	rm -f lex.yy.cpp yacc.tab.h yacc.tab.cpp lex.yy.o yacc.tab.o
+	rm -f lex.yy.cpp yacc.tab.h yacc.tab.cpp lex.yy.o yacc.tab.o var_table.o

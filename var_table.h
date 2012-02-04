@@ -5,7 +5,12 @@
 #include <vector>
 using namespace std;
 
-struct var_entry;
+struct var_entry
+{
+	string id;
+	unsigned long location;
+	bool initialised;
+};
 
 class Var_table
 {
@@ -18,7 +23,7 @@ public:
 	unsigned long getLocation(var_entry* entry);
 	void initialise(var_entry* entry);
 
-private:
+
 	vector<var_entry*> table;
 	unsigned long var_pointer; //empty-ascending stack of variables
 };
