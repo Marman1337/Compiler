@@ -35,8 +35,8 @@ var_declarations	: VAR var_list;
 
 var_list		: var_identifiers COLON var_type SEMICOLON;
 
-var_identifiers		: IDENTIFIER {var_table.addVariable($1);}
-			| var_identifiers COMMA IDENTIFIER {var_table.addVariable($3);};
+var_identifiers		: IDENTIFIER {var_table.addVariable($1); delete $1}
+			| var_identifiers COMMA IDENTIFIER {var_table.addVariable($3); delete $3};
 
 var_type		: INT;
 
@@ -58,6 +58,7 @@ assignment_statement	: IDENTIFIER ASSIGNOP expression
 					temp.append($1); temp.append("'");
 					yyerror(temp.c_str());
 				}
+				delete $1;
 			}; 
 
 expression		: expression addop term
