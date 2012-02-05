@@ -20,9 +20,13 @@ OPAREN CPAREN SEMICOLON COLON COMMA EQUALOP ASSIGNOP DOT
 {
 	int ival;
 	char *sval;
+	bool bval;
 }
 %token <ival> NUMBER
 %token <sval> IDENTIFIER
+%type  <bval> addop
+%type  <ival> num
+%type  <sval> var
 
 %%
 
@@ -61,14 +65,17 @@ assignment_statement	: IDENTIFIER ASSIGNOP expression
 				delete $1;
 			}; 
 
-expression		: expression addop term
-			| term;
+expression		: expression addop num
+			| expression addop var
+			| num
+			| var;
 
-term			: NUMBER
-			| IDENTIFIER;
+num			: NUMBER {$$ = $1; cout << $1 << endl;};
+			
+var			: IDENTIFIER {$$ = $1; cout << $1 << endl;};
 
-addop			: PLUS
-			| MINUS;
+addop			: PLUS  {$$ = true}
+			| MINUS {$$ = false};
 
 %%
 int main()
