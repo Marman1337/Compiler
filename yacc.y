@@ -1,5 +1,6 @@
 %{
 #include <iostream>
+#include <cstdlib>
 #include <string>
 #include <iomanip>
 #include "yacc.tab.h"
@@ -10,6 +11,15 @@ int yylex();
 void yyerror(char const *);
 extern int lineno;
 Var_table var_table;
+
+struct math
+{
+	int value;
+	bool addition;
+};
+
+math buffer[100];
+int index = 0;
 %}
 
 %token PBEGIN END PROGRAM IF THEN ELSE VAR INT
@@ -53,26 +63,58 @@ statement		: assignment_statement SEMICOLON;
 
 assignment_statement	: IDENTIFIER ASSIGNOP expression
 			{
-				var_entry *temp = var_table.lookup($1);
-				if(temp != NULL)
-					temp->initialised = true;
+				var_entry *currentVar = var_table.lookup($1);
+				if(currentVar != NULL)
+				{
+					cout << "\tMOV R0, #0x00000000" << endl;
+					cout << "\tLDR R12, =" << hex << currentVar->location << endl;				
+				}
 				else
 				{
-					string temp("Undeclared variable '");
-					temp.append($1); temp.append("'");
-					yyerror(temp.c_str());
+					string err("Undeclared variable '");
+					err.append($1); err.append("'");
+					yyerror(err.c_str());
 				}
-				delete $1;
+
+				for(int i = 0; i < index; i++)
+				{
+					if(buffer[i].addition == true)
+						cout << "\tADD R0, R0, #0x" << hex << buffer[i].value << endl;
+					else
+						cout << "\tSUB R0, R0, #0x" << hex << buffer[i].value << endl;
+				}			
+				
+				cout << "\tSTR R0, [R12]" << endl;				
+			
+				index = 0; //reset the index for the next assignment
+				
+				currentVar->initialised = true;
+				delete $1; //delete the string of identifier because goes out of scope, no need for memory leak there...
 			}; 
 
 expression		: expression addop num
+			{
+				buffer[index].value = $3;
+				
+				if($2 == true)
+					buffer[index].addition = true;
+				else
+					buffer[index].addition = false;
+
+				index++;
+			}
 			| expression addop var
 			| num
+			{
+				buffer[index].value = $1;
+				buffer[index].addition = true;
+				index++;			
+			}
 			| var;
 
-num			: NUMBER {$$ = $1; cout << $1 << endl;};
+num			: NUMBER {$$ = $1;};
 			
-var			: IDENTIFIER {$$ = $1; cout << $1 << endl;};
+var			: IDENTIFIER {$$ = $1;};
 
 addop			: PLUS  {$$ = true}
 			| MINUS {$$ = false};
