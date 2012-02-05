@@ -12,14 +12,18 @@ void yyerror(char const *);
 extern int lineno;
 Var_table var_table;
 
-struct math
+struct term
 {
+	string id;
 	int value;
 	bool addition;
+	bool constant;
 };
 
-math buffer[100];
+term buffer[100];
 int index = 0;
+
+char id[50];
 %}
 
 %token PBEGIN END PROGRAM IF THEN ELSE VAR INT
@@ -41,7 +45,7 @@ OPAREN CPAREN SEMICOLON COLON COMMA EQUALOP ASSIGNOP DOT
 %%
 
 program			: /* empty program */
-			| program_header var_declarations block DOT {cout << "\nEND\n";}
+			| program_header var_declarations block DOT {cout << "\nEND\n";};
 
 program_header		: PROGRAM IDENTIFIER SEMICOLON {cout << "AREA " << $2 << ",CODE,READWRITE\n\nENTRY\n\n"; delete $2};
 
@@ -63,54 +67,100 @@ statement		: assignment_statement SEMICOLON;
 
 assignment_statement	: IDENTIFIER ASSIGNOP expression
 			{
-				var_entry *currentVar = var_table.lookup($1);
-				if(currentVar != NULL)
+				var_entry *assignVar = var_table.lookup($1); //check if the variable to which assign to was declared
+				if(assignVar != NULL)				// if it was declared
 				{
-					cout << "\tMOV R0, #0x00000000" << endl;
-					cout << "\tLDR R12, =" << hex << currentVar->location << endl;				
+					cout << "\tMOV R0, #0x0" << endl;
+					//cout << "\tLDR R12, =" << hex << assignVar->location << endl;				
 				}
-				else
+				else //if it wasn't declared, terminate and display error
 				{
 					string err("Undeclared variable '");
 					err.append($1); err.append("'");
 					yyerror(err.c_str());
 				}
 
-				for(int i = 0; i < index; i++)
+				for(int i = 0; i < index; i++) //generate data processing code
 				{
-					if(buffer[i].addition == true)
-						cout << "\tADD R0, R0, #0x" << hex << buffer[i].value << endl;
+					if(buffer[i].constant == true) //if the term is just a constant
+					{
+						if(buffer[i].addition == true)
+							cout << "\tADD R0, R0, #0x" << hex << buffer[i].value << endl;
+						else
+							cout << "\tSUB R0, R0, #0x" << hex << buffer[i].value << endl;
+					}
 					else
-						cout << "\tSUB R0, R0, #0x" << hex << buffer[i].value << endl;
+					{
+						var_entry *currentVar = var_table.lookup(buffer[i].id);
+						if(currentVar != NULL)
+						{
+							if(currentVar->initialised == true)
+							{
+								cout << "\tLDR R12, =" << hex << currentVar->location << endl;
+								cout << "\tLDR R1, [R12]" << endl;
+								if(buffer[i].addition == true)
+									cout << "\tADD R0, R0, R1" << endl;
+								else
+									cout << "\tSUB R0, R0, R1" << endl;
+							}
+							else
+							{
+								string err("Uninitialised variable '");
+								err.append(buffer[i].id); err.append("'");
+								yyerror(err.c_str());
+							}
+						}
+						else //if it wasn't declared, terminate and display error
+						{
+							string err("Undeclared variable '");
+							err.append(buffer[i].id); err.append("'");
+							yyerror(err.c_str());
+						}
+					}
+					
 				}			
 				
-				cout << "\tSTR R0, [R12]" << endl;				
+				cout << "\tLDR R12, =" << hex << assignVar->location << endl;
+				cout << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
 			
 				index = 0; //reset the index for the next assignment
 				
-				currentVar->initialised = true;
+				assignVar->initialised = true;
 				delete $1; //delete the string of identifier because goes out of scope, no need for memory leak there...
 			}; 
 
 expression		: expression addop num
 			{
 				buffer[index].value = $3;
-				
-				if($2 == true)
-					buffer[index].addition = true;
-				else
-					buffer[index].addition = false;
-
+				buffer[index].constant = true;
+				buffer[index].id = "";
+				buffer[index].addition = $2;
 				index++;
 			}
 			| expression addop var
+			{
+				buffer[index].value = 0;
+				buffer[index].constant = false;
+				buffer[index].id = $3;
+				buffer[index].addition = $2;
+				index++;
+			}
 			| num
 			{
 				buffer[index].value = $1;
+				buffer[index].constant = true;
+				buffer[index].id = "";
 				buffer[index].addition = true;
 				index++;			
 			}
-			| var;
+			| var
+			{
+				buffer[index].value = 0;
+				buffer[index].constant = false;
+				buffer[index].id = $1;
+				buffer[index].addition = true;
+				index++;
+			};
 
 num			: NUMBER {$$ = $1;};
 			
@@ -123,8 +173,6 @@ addop			: PLUS  {$$ = true}
 int main()
 {
 	yyparse();
-	//for(int i = 0; i < var_table.table.size(); i++)
-	//	cout << "Variable: " << var_table.table[i]->id << "    Memory: " << hex << var_table.table[i]->location << "   Initialised: " << var_table.table[i]->initialised << endl; 
 }
 
 void yyerror(char const *s)

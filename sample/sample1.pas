@@ -1,10 +1,7 @@
 program sample1;
-var 	pierwsza, druga : integer;
-	trzecia, czwarta : boolean;
-	piata, szosta : shortint;
+var 	A, B, C : integer;
 begin
-	A := 2;
-	B := 2-4;
-	C := 4-3+2+5-4;
-
+	A := 3;
+	B := A-1;
+	C := A+B-3;
 end.
