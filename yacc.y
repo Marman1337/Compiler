@@ -90,11 +90,11 @@ if_then_statement	: IF boolean_value then_part;
 
 if_then_else_statement	: IF boolean_value then_part else_part;
 
-then_part		: THEN {cout << "\tBNE exit" << endl;} assignment_statement {cout << "exit";};
+then_part		: THEN {cout << "\tBNE else" << endl;} assignment_statement {cout << "else";};
 
-else_part		: ELSE {cout << "ELSE" << endl;} assignment_statement;
+else_part		: ELSE assignment_statement {cout << "then";};
 
-boolean_value		: NUMBER {cout << "\tHERE WILL BE THE COMPARE CODE" << endl;};
+boolean_value		: NUMBER {cout << "\tCMP R0, R1" << endl;};
 
 expression		: expression addop num
 			{
