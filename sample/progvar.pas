@@ -3,7 +3,7 @@ var 	A, B, C : INTEGER;
 
 BEGIN
 	A := 1;
-	B := 4-A;
-	C := A+B;
-		
+	A := A + 1 + A;
+	B := A+2;
+	C := B-A;		
 END.

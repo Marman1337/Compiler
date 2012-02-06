@@ -28,7 +28,7 @@ void AssignBuffer::flush()
 {
 	for(unsigned int i = 0; i < buffer.size(); i++)
 		delete buffer[i];
-	buffer.clear();	
+	buffer.clear();
 }
 
 unsigned int AssignBuffer::getIndex()

@@ -18,6 +18,7 @@ void addVar(char *);
 void generateAssignment(char *);
 VarTable varTable;
 AssignBuffer buffer;
+unsigned long r12 = 0;
 
 %}
 
@@ -48,7 +49,7 @@ program			: /* empty program */
 program_header		: PROGRAM IDENTIFIER SEMICOLON
 			{
 				cout << "\tAREA " << $2 << ",CODE,READWRITE\n\n\tENTRY\n\n";
-				delete $2
+				delete $2;
 			};
 
 var_declarations	: VAR var_list;
@@ -163,7 +164,12 @@ void generateAssignment(char *n)
 			{
 				if(currentVar->initialised == true)
 				{
-					cout << "\tLDR R12, =0x" << hex << currentVar->location << endl;
+					if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
+					{
+						cout << "\tLDR R12, =0x" << hex << currentVar->location << endl;
+						r12 = currentVar->location;
+					}
+
 					cout << "\tLDR R1, [R12]" << endl;
 					if(temp->addition == true)
 						cout << "\tADD R0, R0, R1" << endl;
@@ -186,8 +192,12 @@ void generateAssignment(char *n)
 		}
 	
 	}			
-				
-	cout << "\tLDR R12, =0x" << hex << assignVar->location << endl;
+	
+	if(r12 != assignVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
+	{			
+		cout << "\tLDR R12, =0x" << hex << assignVar->location << endl;
+		r12 = assignVar->location;
+	}
 	cout << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
 	
 	buffer.flush(); //reset the buffer for the next assignment
