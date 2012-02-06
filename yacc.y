@@ -23,8 +23,8 @@ unsigned long r12 = 0;
 %}
 
 %token PBEGIN END PROGRAM IF THEN ELSE VAR INT
-PLUS MINUS MUL DIV LT GT LE GE NE
-OPAREN CPAREN SEMICOLON COLON COMMA EQUALOP ASSIGNOP DOT
+PLUS MINUS MUL DIV LT GT LE GE NE EQ
+OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 
 %union
 {
@@ -71,11 +71,11 @@ var_type		: INT;
 
 block			: PBEGIN statement_list END;
 
-statement_list		: statement_list statement
-			| statement;
+statement_list		: statement_list statement SEMICOLON
+			| statement SEMICOLON;
 
-statement		: assignment_statement SEMICOLON
-			| if_statement SEMICOLON;
+statement		: assignment_statement
+			| if_statement;
 
 assignment_statement	: IDENTIFIER ASSIGNOP expression
 			{
@@ -90,11 +90,17 @@ if_then_statement	: IF boolean_value then_part;
 
 if_then_else_statement	: IF boolean_value then_part else_part;
 
-then_part		: THEN {cout << "\tBNE else" << endl;} assignment_statement {cout << "\tB then" << endl << "else";};
+then_part		: THEN then_body /*{cout << "\tB then" << endl << "else";}*/;
 
-else_part		: ELSE assignment_statement {cout << "then";};
+then_body		: assignment_statement
+			| if_statement;
 
-boolean_value		: NUMBER {cout << "\tCMP R0, R1" << endl;};
+else_part		: ELSE else_body /*{cout << "then";}*/;
+
+else_body		: assignment_statement
+			| if_statement;
+
+boolean_value		: IDENTIFIER relop expression;
 
 expression		: expression addop num
 			{
@@ -119,6 +125,13 @@ var			: IDENTIFIER {$$ = $1;};
 
 addop			: PLUS  {$$ = true}
 			| MINUS {$$ = false};
+
+relop			: LT
+			| GT
+			| LE
+			| GE
+			| EQ
+			| NE;
 
 %%
 int main()
@@ -204,7 +217,6 @@ void generateAssignment(char *n)
 				yyerror(err.c_str());
 			}
 		}
-	
 	}			
 	
 	if(r12 != assignVar->location) //if R12 already has address of the variable, no need to LDR the same value to it

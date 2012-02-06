@@ -26,12 +26,12 @@ int lineno = 1;
 "<="				{return LE;}
 ">="				{return GE;}
 "<>"				{return NE;}
+"="				{return EQ;}
 "("				{return OPAREN;}
 ")"				{return CPAREN;}
 ";"				{return SEMICOLON;}
 ":"				{return COLON;}
 ","				{return COMMA;}
-"="				{return EQUALOP;}
 ":="				{return ASSIGNOP;}
 "."				{return DOT;}
 [\n\r]				{lineno++;}
