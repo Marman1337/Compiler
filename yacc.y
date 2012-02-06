@@ -35,7 +35,7 @@ OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 %token <ival> NUMBER
 %token <sval> IDENTIFIER
 %type  <bval> addop
-%type  <ival> num
+%type  <ival> num relop
 %type  <sval> var
 
 %%
@@ -90,17 +90,112 @@ if_then_statement	: IF boolean_value then_part;
 
 if_then_else_statement	: IF boolean_value then_part else_part;
 
-then_part		: THEN then_body /*{cout << "\tB then" << endl << "else";}*/;
+then_part		: THEN then_body {cout << "\tB then" << endl << "else";};
 
 then_body		: assignment_statement
 			| if_statement;
 
-else_part		: ELSE else_body /*{cout << "then";}*/;
+else_part		: ELSE else_body {cout << "then";};
 
 else_body		: assignment_statement
 			| if_statement;
 
-boolean_value		: IDENTIFIER relop expression;
+boolean_value		: IDENTIFIER relop expression
+			{
+				varEntry *testVar = varTable.lookup($1);
+
+				if(testVar != NULL)
+				{
+					if(r12 != testVar->location)
+					{
+						cout << "\tLDR R12, =0x" << hex << testVar->location << endl;
+						r12 = testVar->location;
+					}
+					cout << "\tLDR R0, [R12]" << endl;
+				}				
+				else                          //if it wasn't declared, terminate and display error
+				{
+					string err("Undeclared variable '");
+					err.append($1); err.append("'");
+					yyerror(err.c_str());
+				}
+
+				cout << "\tMOV R1, #0x0" << endl;
+
+				for(int i = 0; i < buffer.getIndex(); i++) //generate data processing code
+				{
+					term *temp = buffer.getEntry(i);    //get the part of the assignment to process from the buffer
+
+					if(temp->constant == true)        //if the term is just a constant
+					{
+						if(temp->addition == true)
+							cout << "\tADD R1, R1, #0x" << hex << temp->value << endl;
+						else
+							cout << "\tSUB R1, R1, #0x" << hex << temp->value << endl;
+					}
+					else                            //if the term is a variable
+					{
+						varEntry *currentVar = varTable.lookup(temp->id);       //get appropriate entry from the variables symbol table
+
+						if(currentVar != NULL)
+						{
+							if(currentVar->initialised == true)
+							{
+								if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
+								{
+									cout << "\tLDR R12, =0x" << hex << currentVar->location << endl;
+									r12 = currentVar->location;
+								}
+
+								cout << "\tLDR R1, [R12]" << endl;
+								if(temp->addition == true)
+									cout << "\tADD R1, R1, R2" << endl;
+								else
+									cout << "\tSUB R1, R1, R2" << endl;
+							}
+							else
+							{
+								string err("Uninitialised variable '");
+								err.append(temp->id); err.append("'");
+								yyerror(err.c_str());
+							}
+						}
+						else //if it wasn't declared, terminate and display error
+						{
+							string err("Undeclared variable '");
+							err.append(temp->id); err.append("'");
+							yyerror(err.c_str());
+						}
+					}
+				}			
+	
+				cout << "\tCMP R0, R1" << endl;
+
+				switch($2) //generate appropriate branch
+				{
+				case 0:
+					cout << "\tBEQ else" << endl;
+					break;
+				case 1:
+					cout << "\tBNE else" << endl;
+					break;
+				case 2:
+					cout << "\tBLT else" << endl;
+					break;
+				case 3:
+					cout << "\tBGT else" << endl;
+					break;
+				case 4:
+					cout << "\tBLE else" << endl;
+					break;
+				case 5:
+					cout << "\tBGE else" << endl;
+					break;
+				}
+	
+				buffer.flush(); //reset the buffer for the next assignment
+				
+			};
 
 expression		: expression addop num
 			{
@@ -126,12 +221,12 @@ var			: IDENTIFIER {$$ = $1;};
 addop			: PLUS  {$$ = true}
 			| MINUS {$$ = false};
 
-relop			: LT
-			| GT
-			| LE
-			| GE
-			| EQ
-			| NE;
+relop			: LT {$$ = 5;}
+			| GT {$$ = 4;}
+			| LE {$$ = 3;}
+			| GE {$$ = 2;}
+			| EQ {$$ = 1;}
+			| NE {$$ = 0;};
 
 %%
 int main()
