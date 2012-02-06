@@ -74,13 +74,27 @@ block			: PBEGIN statement_list END;
 statement_list		: statement_list statement
 			| statement;
 
-statement		: assignment_statement SEMICOLON;
+statement		: assignment_statement SEMICOLON
+			| if_statement SEMICOLON;
 
 assignment_statement	: IDENTIFIER ASSIGNOP expression
 			{
 				generateAssignment($1);
 				delete $1; //delete the string of identifier because goes out of scope, no need for memory leak there...
 			}; 
+
+if_statement		: if_then_statement
+			| if_then_else_statement;
+
+if_then_statement	: IF boolean_value then_part;
+
+if_then_else_statement	: IF boolean_value then_part else_part;
+
+then_part		: THEN {cout << "\tBNE exit" << endl;} assignment_statement {cout << "exit";};
+
+else_part		: ELSE {cout << "ELSE" << endl;} assignment_statement;
+
+boolean_value		: NUMBER {cout << "\tHERE WILL BE THE COMPARE CODE" << endl;};
 
 expression		: expression addop num
 			{
