@@ -18,7 +18,7 @@ public:
 	VarTable();
 	~VarTable();
 
-	bool addVariable(string n);
+	void addVariable(string n);
 	varEntry* lookup(string n);
 	unsigned long getLocation(varEntry* entry);
 	void initialise(varEntry* entry);
