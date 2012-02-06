@@ -1,8 +1,9 @@
 program owned;
-var 	piec, dwa, debiec : INTEGER;
+var 	A, B, C : INTEGER;
 
 BEGIN
-	debiec := 3;
-	dwa := 1+3-debiec;
-	piec := 1-2-dwa+debiec;
+	A := 1;
+	B := 4-A;
+	C := A+B;
+		
 END.
