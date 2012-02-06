@@ -90,7 +90,7 @@ if_then_statement	: IF boolean_value then_part;
 
 if_then_else_statement	: IF boolean_value then_part else_part;
 
-then_part		: THEN {cout << "\tBNE else" << endl;} assignment_statement {cout << "else";};
+then_part		: THEN {cout << "\tBNE else" << endl;} assignment_statement {cout << "\tB then" << endl << "else";};
 
 else_part		: ELSE assignment_statement {cout << "then";};
 
