@@ -35,7 +35,7 @@ int lineno = 1;
 ":="				{return ASSIGNOP;}
 "."				{return DOT;}
 [\n\r]				{lineno++;}
-[ \t]+ 				{}			 /* ignore whitespace */
+[ \t]+ 				{}			 /* ignore whitespacee */
 
 [a-zA-Z][a-zA-Z0-9]*		{char *res = new char[strlen(yytext)+1]; strcpy(res,yytext); yylval.sval = res; return IDENTIFIER;}
 [0-9]+				{yylval.ival = atoi(yytext); return NUMBER;}
