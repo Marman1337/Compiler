@@ -16,6 +16,8 @@ extern int lineno;
 /* USER-WRITTEN FUNCTIONS & VARIABLES */
 void addVar(char *);
 void generateAssignment(char *);
+void generateCompare(char *, int);
+void processBuffer();
 VarTable varTable;
 AssignBuffer buffer;
 unsigned long r12 = 0;
@@ -102,99 +104,8 @@ else_body		: assignment_statement
 
 boolean_value		: IDENTIFIER relop expression
 			{
-				varEntry *testVar = varTable.lookup($1);
-
-				if(testVar != NULL)
-				{
-					if(r12 != testVar->location)
-					{
-						cout << "\tLDR R12, =0x" << hex << testVar->location << endl;
-						r12 = testVar->location;
-					}
-					cout << "\tLDR R0, [R12]" << endl;
-				}				
-				else                          //if it wasn't declared, terminate and display error
-				{
-					string err("Undeclared variable '");
-					err.append($1); err.append("'");
-					yyerror(err.c_str());
-				}
-
-				cout << "\tMOV R1, #0x0" << endl;
-
-				for(int i = 0; i < buffer.getIndex(); i++) //generate data processing code
-				{
-					term *temp = buffer.getEntry(i);    //get the part of the assignment to process from the buffer
-
-					if(temp->constant == true)        //if the term is just a constant
-					{
-						if(temp->addition == true)
-							cout << "\tADD R1, R1, #0x" << hex << temp->value << endl;
-						else
-							cout << "\tSUB R1, R1, #0x" << hex << temp->value << endl;
-					}
-					else                            //if the term is a variable
-					{
-						varEntry *currentVar = varTable.lookup(temp->id);       //get appropriate entry from the variables symbol table
-
-						if(currentVar != NULL)
-						{
-							if(currentVar->initialised == true)
-							{
-								if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
-								{
-									cout << "\tLDR R12, =0x" << hex << currentVar->location << endl;
-									r12 = currentVar->location;
-								}
-
-								cout << "\tLDR R1, [R12]" << endl;
-								if(temp->addition == true)
-									cout << "\tADD R1, R1, R2" << endl;
-								else
-									cout << "\tSUB R1, R1, R2" << endl;
-							}
-							else
-							{
-								string err("Uninitialised variable '");
-								err.append(temp->id); err.append("'");
-								yyerror(err.c_str());
-							}
-						}
-						else //if it wasn't declared, terminate and display error
-						{
-							string err("Undeclared variable '");
-							err.append(temp->id); err.append("'");
-							yyerror(err.c_str());
-						}
-					}
-				}			
-	
-				cout << "\tCMP R0, R1" << endl;
-
-				switch($2) //generate appropriate branch
-				{
-				case 0:
-					cout << "\tBEQ else" << endl;
-					break;
-				case 1:
-					cout << "\tBNE else" << endl;
-					break;
-				case 2:
-					cout << "\tBLT else" << endl;
-					break;
-				case 3:
-					cout << "\tBGT else" << endl;
-					break;
-				case 4:
-					cout << "\tBLE else" << endl;
-					break;
-				case 5:
-					cout << "\tBGE else" << endl;
-					break;
-				}
-	
-				buffer.flush(); //reset the buffer for the next assignment
-				
+				generateCompare($1, $2);
+				delete $1;
 			};
 
 expression		: expression addop num
@@ -240,8 +151,6 @@ void yyerror(char const *s)
 	exit(-1);
 }
 
-
-
 void addVar(char *i)
 {
 	if(varTable.lookup(i) == NULL)    //check if the variable has not been declared already
@@ -258,15 +167,80 @@ void generateAssignment(char *n)
 {
 	varEntry *assignVar = varTable.lookup(n); //check if the variable to which assign to was declared
 				
-	if(assignVar != NULL)          //if it was declared
-		cout << "\tMOV R0, #0x0" << endl;
-	else                          //if it wasn't declared, terminate and display error
+	if(assignVar == NULL)          //if the variable has not been declared
 	{
 		string err("Undeclared variable '");
 		err.append(n); err.append("'");
 		yyerror(err.c_str());
 	}
 
+	cout << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
+
+	processBuffer();
+	
+	if(r12 != assignVar->location) //if R12 already has address of the variable, no need to load the same value to it
+	{			
+		cout << "\tLDR R12, =0x" << hex << assignVar->location << endl;
+		r12 = assignVar->location;
+	}
+
+	cout << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
+	
+	assignVar->initialised = true;		//flag that the variable has been initialised
+}
+
+void generateCompare(char *n, int c)
+{
+	varEntry *testVar = varTable.lookup(n);
+
+	if(testVar != NULL) //check if the variable which is being compared has been declared
+	{
+		if(r12 != testVar->location) //if it has been declared, check if r12 has its address in it
+		{
+			cout << "\tLDR R12, =0x" << hex << testVar->location << endl;
+			r12 = testVar->location;
+		}
+
+		cout << "\tLDR R2, [R12]" << endl; //load the variable to R2
+	}				
+	else                          //if the variable has not been declared, terminate and display error
+	{
+		string err("Undeclared variable '");
+		err.append(n); err.append("'");
+		yyerror(err.c_str());
+	}
+
+	cout << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
+
+	processBuffer();
+
+	cout << "\tCMP R2, R0" << endl; //compare the variable on the LHS with the expression on the RHS (f.e. 'A >= 2+3')
+
+	switch(c) //generate appropriate branch
+	{
+	case 0: //token NE (not equal), else branch is therefore if two values are EQ (equal)
+		cout << "\tBEQ else" << endl;
+		break;
+	case 1: //token EQ (equal), else branch is therefore if two values are NE (not equal)
+		cout << "\tBNE else" << endl;
+		break;
+	case 2: //token GE (greater or equal), else branch is therefore if the first value is LT (less than)
+		cout << "\tBLT else" << endl;
+		break;
+	case 3: //token LE (less or equal), else branch is therefore if the first value is GT (greater than)
+		cout << "\tBGT else" << endl;
+		break;
+	case 4: //token GT (greater than), else branch is therefore if the first value is LE (less or equal)
+		cout << "\tBLE else" << endl;
+		break;
+	case 5: //token LT (less than), else branch is therefore if the first value is GE (greater or equal)
+		cout << "\tBGE else" << endl;
+		break;
+	}			
+}
+
+void processBuffer()
+{
 	for(int i = 0; i < buffer.getIndex(); i++) //generate data processing code
 	{
 		term *temp = buffer.getEntry(i);    //get the part of the assignment to process from the buffer
@@ -293,6 +267,7 @@ void generateAssignment(char *n)
 					}
 
 					cout << "\tLDR R1, [R12]" << endl;
+
 					if(temp->addition == true)
 						cout << "\tADD R0, R0, R1" << endl;
 					else
@@ -312,16 +287,7 @@ void generateAssignment(char *n)
 				yyerror(err.c_str());
 			}
 		}
-	}			
-	
-	if(r12 != assignVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
-	{			
-		cout << "\tLDR R12, =0x" << hex << assignVar->location << endl;
-		r12 = assignVar->location;
 	}
-	cout << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
 	
-	buffer.flush(); //reset the buffer for the next assignment
-				
-	assignVar->initialised = true;
+	buffer.flush(); //reset the buffer for the next assignment	
 }
