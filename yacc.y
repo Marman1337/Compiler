@@ -85,22 +85,20 @@ assignment_statement	: IDENTIFIER ASSIGNOP expression
 				delete $1; //delete the string of identifier because goes out of scope, no need for memory leak there...
 			}; 
 
-if_statement		: if_then_statement
-			| if_then_else_statement;
+if_statement		: if_then_statement {r12 = 0;}
+			| if_then_else_statement {r12 = 0;};
 
-if_then_statement	: IF boolean_value then_part;
+if_then_statement	: IF boolean_value then_part {cout << "else";};
 
 if_then_else_statement	: IF boolean_value then_part else_part;
 
-then_part		: THEN then_body {cout << "\tB then" << endl << "else";};
+then_part		: THEN then_body;
 
-then_body		: assignment_statement
-			| if_statement;
+then_body		: assignment_statement;
 
-else_part		: ELSE else_body {cout << "then";};
+else_part		: ELSE {cout << "\tB then" << endl << "else";} else_body {cout << "then";};
 
-else_body		: assignment_statement
-			| if_statement;
+else_body		: assignment_statement;
 
 boolean_value		: IDENTIFIER relop expression
 			{
