@@ -1,5 +1,6 @@
 %{
 #include <iostream>
+#include <fstream>
 #include <cstdlib>
 #include <string>
 #include <iomanip>
@@ -18,6 +19,8 @@ void addVar(char *);
 void generateAssignment(char *);
 void generateCompare(char *, int);
 void processBuffer();
+ofstream out;
+string outFileName;
 VarTable varTable;
 AssignBuffer buffer;
 unsigned long r12 = 0;
@@ -45,12 +48,12 @@ OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 program			: /* empty program */
 			| program_header var_declarations block DOT
 			{
-				cout << "\n\tEND\n";
+				out << "\n\tEND\n";
 			};
 
 program_header		: PROGRAM IDENTIFIER SEMICOLON
 			{
-				cout << "\tAREA " << $2 << ",CODE,READWRITE\n\n\tENTRY\n\n";
+				out << "\tAREA " << $2 << ",CODE,READWRITE\n\n\tENTRY\n\n";
 				delete $2;
 			};
 
@@ -88,7 +91,7 @@ assignment_statement	: IDENTIFIER ASSIGNOP expression
 if_statement		: if_then_statement {r12 = 0;}
 			| if_then_else_statement {r12 = 0;};
 
-if_then_statement	: IF boolean_value then_part {cout << "else";};
+if_then_statement	: IF boolean_value then_part {out << "else";};
 
 if_then_else_statement	: IF boolean_value then_part else_part;
 
@@ -96,7 +99,7 @@ then_part		: THEN then_body;
 
 then_body		: assignment_statement;
 
-else_part		: ELSE {cout << "\tB then" << endl << "else";} else_body {cout << "then";};
+else_part		: ELSE {out << "\tB then" << endl << "else";} else_body {out << "then";};
 
 else_body		: assignment_statement;
 
@@ -138,14 +141,38 @@ relop			: LT {$$ = 5;}
 			| NE {$$ = 0;};
 
 %%
-int main()
+int main(int argc, char* argv[])
 {
-	yyparse();
+	if(argc == 2)
+	{
+		outFileName = argv[1];
+		out.open(outFileName.c_str());
+		
+		if(out.is_open() == true)
+		{
+			yyparse();
+			out.close();
+		}
+		else
+			cout << "Could not open: " << outFileName << endl;
+	}
+	else
+	{
+		cout << "Error: Invalid number of command line arguments." << endl;
+		cout << "The correct way to run the program is:" << endl;
+		cout << "PROGRAM_NAME OUTPUT_FILE_NAME < PATH_TO_INPUT_FILE" << endl;
+		exit(-1);
+	}
 }
 
 void yyerror(char const *s)
 {
 	cout << "Error: " << s << ", line: " << lineno << endl;
+	
+	out.close();       //quick and effortless way to clear the file which was previously written to
+	out.open(outFileName.c_str());
+	out.close();
+	
 	exit(-1);
 }
 
@@ -172,17 +199,17 @@ void generateAssignment(char *n)
 		yyerror(err.c_str());
 	}
 
-	cout << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
+	out << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
 
 	processBuffer();
 	
 	if(r12 != assignVar->location) //if R12 already has address of the variable, no need to load the same value to it
 	{			
-		cout << "\tLDR R12, =0x" << hex << assignVar->location << endl;
+		out << "\tLDR R12, =0x" << hex << assignVar->location << endl;
 		r12 = assignVar->location;
 	}
 
-	cout << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
+	out << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
 	
 	assignVar->initialised = true;		//flag that the variable has been initialised
 }
@@ -195,11 +222,11 @@ void generateCompare(char *n, int c)
 	{
 		if(r12 != testVar->location) //if it has been declared, check if r12 has its address in it
 		{
-			cout << "\tLDR R12, =0x" << hex << testVar->location << endl;
+			out << "\tLDR R12, =0x" << hex << testVar->location << endl;
 			r12 = testVar->location;
 		}
 
-		cout << "\tLDR R2, [R12]" << endl; //load the variable to R2
+		out << "\tLDR R2, [R12]" << endl; //load the variable to R2
 	}				
 	else                          //if the variable has not been declared, terminate and display error
 	{
@@ -208,31 +235,31 @@ void generateCompare(char *n, int c)
 		yyerror(err.c_str());
 	}
 
-	cout << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
+	out << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
 
 	processBuffer();
 
-	cout << "\tCMP R2, R0" << endl; //compare the variable on the LHS with the expression on the RHS (f.e. 'A >= 2+3')
+	out << "\tCMP R2, R0" << endl; //compare the variable on the LHS with the expression on the RHS (f.e. 'A >= 2+3')
 
 	switch(c) //generate appropriate branch
 	{
 	case 0: //token NE (not equal), else branch is therefore if two values are EQ (equal)
-		cout << "\tBEQ else" << endl;
+		out << "\tBEQ else" << endl;
 		break;
 	case 1: //token EQ (equal), else branch is therefore if two values are NE (not equal)
-		cout << "\tBNE else" << endl;
+		out << "\tBNE else" << endl;
 		break;
 	case 2: //token GE (greater or equal), else branch is therefore if the first value is LT (less than)
-		cout << "\tBLT else" << endl;
+		out << "\tBLT else" << endl;
 		break;
 	case 3: //token LE (less or equal), else branch is therefore if the first value is GT (greater than)
-		cout << "\tBGT else" << endl;
+		out << "\tBGT else" << endl;
 		break;
 	case 4: //token GT (greater than), else branch is therefore if the first value is LE (less or equal)
-		cout << "\tBLE else" << endl;
+		out << "\tBLE else" << endl;
 		break;
 	case 5: //token LT (less than), else branch is therefore if the first value is GE (greater or equal)
-		cout << "\tBGE else" << endl;
+		out << "\tBGE else" << endl;
 		break;
 	}			
 }
@@ -246,9 +273,9 @@ void processBuffer()
 		if(temp->constant == true)        //if the term is just a constant
 		{
 			if(temp->addition == true)
-				cout << "\tADD R0, R0, #0x" << hex << temp->value << endl;
+				out << "\tADD R0, R0, #0x" << hex << temp->value << endl;
 			else
-				cout << "\tSUB R0, R0, #0x" << hex << temp->value << endl;
+				out << "\tSUB R0, R0, #0x" << hex << temp->value << endl;
 		}
 		else                            //if the term is a variable
 		{
@@ -256,32 +283,26 @@ void processBuffer()
 
 			if(currentVar != NULL)
 			{
-				if(currentVar->initialised == true)
+				if(currentVar->initialised == false)
+					cout << "Warning: Uninitialised variable '" << currentVar->id << "', line: " << lineno << endl;
+				
+				if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
 				{
-					if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
-					{
-						cout << "\tLDR R12, =0x" << hex << currentVar->location << endl;
-						r12 = currentVar->location;
-					}
-
-					cout << "\tLDR R1, [R12]" << endl;
-
-					if(temp->addition == true)
-						cout << "\tADD R0, R0, R1" << endl;
-					else
-						cout << "\tSUB R0, R0, R1" << endl;
+					out << "\tLDR R12, =0x" << hex << currentVar->location << endl;
+					r12 = currentVar->location;
 				}
+
+				out << "\tLDR R1, [R12]" << endl;
+
+				if(temp->addition == true)
+					out << "\tADD R0, R0, R1" << endl;
 				else
-				{
-					string err("Uninitialised variable '");
-					err.append(temp->id); err.append("'");
-					yyerror(err.c_str());
-				}
+					out << "\tSUB R0, R0, R1" << endl;
 			}
 			else //if it wasn't declared, terminate and display error
 			{
 				string err("Undeclared variable '");
-				err.append(temp->id); err.append("'");
+				err.append(currentVar->id); err.append("'");
 				yyerror(err.c_str());
 			}
 		}
