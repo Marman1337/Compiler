@@ -15,6 +15,9 @@ int lineno = 1;
 (IF|if)				{return IF;}
 (THEN|then)			{return THEN;}
 (ELSE|else)			{return ELSE;}
+(FOR|for)			{return FOR;}
+(TO|to)				{return TO;}
+(DO|do)				{return DO;}
 (VAR|var)			{return VAR;}
 (INTEGER|integer)		{return INT;}
 "+"				{return PLUS;}
