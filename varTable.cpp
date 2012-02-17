@@ -6,7 +6,7 @@ using namespace std;
 
 VarTable::VarTable()
 {
-	varPointer = 0xE0010008;
+	varPointer = 0xE0010010;
 }
 
 VarTable::~VarTable()

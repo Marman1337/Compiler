@@ -1,7 +1,14 @@
 program owned;
 
-var 	A, B : INTEGER;
+var 	A, B, C : INTEGER;
 
 BEGIN
-	FOR A := 1 TO 10 DO B := B+5;
+	B := 0;
+	C := 0;
+
+	FOR A := 2 TO 1 DO
+	BEGIN
+		B := B+2;
+		C := C+3;
+	END;
 END.

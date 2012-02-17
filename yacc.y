@@ -105,12 +105,12 @@ if_then_else_statement	: IF boolean_part then_part else_part;
 
 then_part		: THEN then_body;
 
-then_body		: if_block
+then_body		: loop_block
 			| assignment_statement;
 
 else_part		: ELSE {out << "\tB then" << if_count << endl << "else" << if_count;} else_body {out << "then" << if_count;};
 
-else_body		: if_block
+else_body		: loop_block
 			| assignment_statement;
 
 boolean_part		: OPAREN boolean_value CPAREN
@@ -122,30 +122,31 @@ boolean_value		: IDENTIFIER relop expression
 				delete $1;
 			};
 
-if_block		: PBEGIN assignment_statements END;
+loop_block		: PBEGIN assignment_statements END;
 
 for_loop		: FOR assignment_statement TO var DO for_body
 			| FOR assignment_statement
 			  TO num
 			  {
-				inForLoop = true;
-				dummyForVariable = lastAssigned;
+				inForLoop = true; /*mark that we are in the for loop, need for the generateAssignment() function to check for
+						    trying to assign to the dummy variable which is illegal */
+				dummyForVariable = lastAssigned;     //save the name of the dummy variable
 				out << "\tMOV R10, R0\n\tMOV R11, #0x" << hex << $4 << endl << "\tCMP R10, R11" << endl << "\tBGT loopend" << endl << "loop";
 			  }
 			  DO for_body
 			  {
-				out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE loop" << endl;
-				varEntry *dummyVar = varTable.lookup(dummyForVariable);
-
+				out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE loop" << endl; //generate COMPARE instruction and corresponding branch if LESS or EQUAL
+				varEntry *dummyVar = varTable.lookup(dummyForVariable); /* after finished loop, need to store the dummy variable to memory
+								its value will be always greater by 1 from the terminating value */
 				out << "\tLDR R12, =0x" << hex << dummyVar->location << endl;
 				r12 = dummyVar->location;
 				out << "\tSTR R10, [R12]\nloopend";
-				
-				inForLoop = false;
-				dummyForVariable = "";
+				inForLoop = false;     //mark that it is the end of for loop
+				dummyForVariable = ""; //reset the dummy variable string
 			  };
 
-for_body		: assignment_statement;
+for_body		: loop_block
+			| assignment_statement;
 
 expression		: expression addop num
 			{
@@ -328,29 +329,39 @@ void processBuffer()
 		{
 			varEntry *currentVar = varTable.lookup(temp->id);       //get appropriate entry from the variables symbol table
 
-			if(currentVar != NULL)
+			if(inForLoop == true && currentVar->id == dummyForVariable)  //if we are in for loop and the dummy variable is on the RHS of the assignment
 			{
-				if(currentVar->initialised == false)
-					cout << "Warning: Uninitialised variable '" << currentVar->id << "', line: " << lineno << endl;
-				
-				if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
-				{
-					out << "\tLDR R12, =0x" << hex << currentVar->location << endl;
-					r12 = currentVar->location;
-				}
-
-				out << "\tLDR R1, [R12]" << endl;
-
 				if(temp->addition == true)
-					out << "\tADD R0, R0, R1" << endl;
+					out << "\tADD R0, R0, R10" << endl;
 				else
-					out << "\tSUB R0, R0, R1" << endl;
+					out << "\tSUB R0, R0, R10" << endl;
 			}
-			else //if it wasn't declared, terminate and display error
+			else
 			{
-				string err("Undeclared variable '");
-				err.append(currentVar->id); err.append("'");
-				yyerror(err.c_str());
+				if(currentVar != NULL)
+				{
+					if(currentVar->initialised == false)
+						cout << "Warning: Uninitialised variable '" << currentVar->id << "', line: " << lineno << endl;
+				
+					if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
+					{
+						out << "\tLDR R12, =0x" << hex << currentVar->location << endl;
+						r12 = currentVar->location;
+					}
+
+					out << "\tLDR R1, [R12]" << endl;
+
+					if(temp->addition == true)
+						out << "\tADD R0, R0, R1" << endl;
+					else
+						out << "\tSUB R0, R0, R1" << endl;
+				}
+				else //if it wasn't declared, terminate and display error
+				{
+					string err("Undeclared variable '");
+					err.append(currentVar->id); err.append("'");
+					yyerror(err.c_str());
+				}
 			}
 		}
 	}
