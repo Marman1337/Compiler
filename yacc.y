@@ -25,6 +25,9 @@ VarTable varTable;
 AssignBuffer buffer;
 unsigned long r12 = 0;
 unsigned int if_count = 1;
+bool inForLoop = false;
+string lastAssigned;
+string dummyForVariable = "";
 
 %}
 
@@ -81,7 +84,8 @@ statement_list		: statement_list statement SEMICOLON
 			| statement SEMICOLON;
 
 statement		: assignment_statement
-			| if_statement;
+			| if_statement
+			| for_loop;
 
 assignment_statements	: assignment_statements assignment_statement SEMICOLON
 			| assignment_statement SEMICOLON;
@@ -119,6 +123,29 @@ boolean_value		: IDENTIFIER relop expression
 			};
 
 if_block		: PBEGIN assignment_statements END;
+
+for_loop		: FOR assignment_statement TO var DO for_body
+			| FOR assignment_statement
+			  TO num
+			  {
+				inForLoop = true;
+				dummyForVariable = lastAssigned;
+				out << "\tMOV R10, R0\n\tMOV R11, #0x" << hex << $4 << endl << "\tCMP R10, R11" << endl << "\tBGT loopend" << endl << "loop";
+			  }
+			  DO for_body
+			  {
+				out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE loop" << endl;
+				varEntry *dummyVar = varTable.lookup(dummyForVariable);
+
+				out << "\tLDR R12, =0x" << hex << dummyVar->location << endl;
+				r12 = dummyVar->location;
+				out << "\tSTR R10, [R12]\nloopend";
+				
+				inForLoop = false;
+				dummyForVariable = "";
+			  };
+
+for_body		: assignment_statement;
 
 expression		: expression addop num
 			{
@@ -202,13 +229,21 @@ void addVar(char *i)
 void generateAssignment(char *n)
 {
 	varEntry *assignVar = varTable.lookup(n); //check if the variable to which assign to was declared
-				
+		
 	if(assignVar == NULL)          //if the variable has not been declared
 	{
 		string err("Undeclared variable '");
 		err.append(n); err.append("'");
 		yyerror(err.c_str());
 	}
+	
+	if(inForLoop == true && assignVar->id == dummyForVariable)
+	{
+		string err("Trying to modify the for loop dummy variable '");
+		err.append(dummyForVariable); err.append("'");
+		err.append(" inside the for loop body. Illegal");
+		yyerror(err.c_str());
+	}	
 
 	out << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
 
@@ -223,6 +258,7 @@ void generateAssignment(char *n)
 	out << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
 	
 	assignVar->initialised = true;		//flag that the variable has been initialised
+	lastAssigned = assignVar->id;
 }
 
 void generateCompare(char *n, int c)

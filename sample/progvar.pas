@@ -1,9 +1,7 @@
 program owned;
 
-var 	A, B, C : INTEGER;
+var 	A, B : INTEGER;
 
 BEGIN
-	A := 3;
-	IF (A = 2) THEN A := 1 ELSE A := 2;
-	IF A < 4 THEN A := 4 ELSE A := 5;
+	FOR A := 1 TO 10 DO B := B+5;
 END.
