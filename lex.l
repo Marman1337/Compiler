@@ -18,6 +18,7 @@ int lineno = 1;
 (FOR|for)			{return FOR;}
 (TO|to)				{return TO;}
 (DO|do)				{return DO;}
+(WHILE|while)			{return WHILE;}
 (VAR|var)			{return VAR;}
 (INTEGER|integer)		{return INT;}
 "+"				{return PLUS;}

@@ -24,7 +24,8 @@ string outFileName;
 VarTable varTable;
 AssignBuffer buffer;
 unsigned long r12 = 0;
-unsigned int if_count = 1;
+unsigned int ifCount = 1;
+unsigned int loopCount = 1;
 bool inForLoop = false;
 string lastAssigned;
 string dummyForVariable = "";
@@ -96,10 +97,10 @@ assignment_statement	: IDENTIFIER ASSIGNOP expression
 				delete $1; //delete the string of identifier because goes out of scope, no need for memory leak there...
 			}; 
 
-if_statement		: if_then_statement {r12 = 0; if_count++;}
-			| if_then_else_statement {r12 = 0; if_count++;};
+if_statement		: if_then_statement {r12 = 0; ifCount++;}
+			| if_then_else_statement {r12 = 0; ifCount++;};
 
-if_then_statement	: IF boolean_part then_part {out << "else" << if_count;};
+if_then_statement	: IF boolean_part then_part {out << "else" << ifCount;};
 
 if_then_else_statement	: IF boolean_part then_part else_part;
 
@@ -108,7 +109,7 @@ then_part		: THEN then_body;
 then_body		: loop_block
 			| assignment_statement;
 
-else_part		: ELSE {out << "\tB then" << if_count << endl << "else" << if_count;} else_body {out << "then" << if_count;};
+else_part		: ELSE {out << "\tB then" << ifCount << endl << "else" << ifCount;} else_body {out << "then" << ifCount;};
 
 else_body		: loop_block
 			| assignment_statement;
@@ -124,26 +125,32 @@ boolean_value		: IDENTIFIER relop expression
 
 loop_block		: PBEGIN assignment_statements END;
 
-for_loop		: FOR assignment_statement TO var DO for_body
-			| FOR assignment_statement
+for_loop		: FOR start_value TO var DO for_body
+			| FOR start_value
 			  TO num
 			  {
 				inForLoop = true; /*mark that we are in the for loop, need for the generateAssignment() function to check for
 						    trying to assign to the dummy variable which is illegal */
 				dummyForVariable = lastAssigned;     //save the name of the dummy variable
-				out << "\tMOV R10, R0\n\tMOV R11, #0x" << hex << $4 << endl << "\tCMP R10, R11" << endl << "\tBGT loopend" << endl << "loop";
+				out << "\tMOV R10, R0\n\tMOV R11, #0x" << hex << $4 << endl << "\tCMP R10, R11" << endl;
+				out << "\tBGT forend" << loopCount << endl << "for" << loopCount;
 			  }
 			  DO for_body
 			  {
-				out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE loop" << endl; //generate COMPARE instruction and corresponding branch if LESS or EQUAL
+				out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE for" << loopCount << endl; //generate COMPARE instruction and corresponding branch if LESS or EQUAL
 				varEntry *dummyVar = varTable.lookup(dummyForVariable); /* after finished loop, need to store the dummy variable to memory
 								its value will be always greater by 1 from the terminating value */
 				out << "\tLDR R12, =0x" << hex << dummyVar->location << endl;
 				r12 = dummyVar->location;
-				out << "\tSTR R10, [R12]\nloopend";
+				out << "\tSTR R10, [R12]\nforend" << loopCount;
 				inForLoop = false;     //mark that it is the end of for loop
 				dummyForVariable = ""; //reset the dummy variable string
+
+				loopCount++;
 			  };
+
+start_value		: OPAREN assignment_statement CPAREN
+			| assignment_statement;
 
 for_body		: loop_block
 			| assignment_statement;
@@ -292,22 +299,22 @@ void generateCompare(char *n, int c)
 	switch(c) //generate appropriate branch
 	{
 	case 0: //token NE (not equal), else branch is therefore if two values are EQ (equal)
-		out << "\tBEQ else" << if_count << endl;
+		out << "\tBEQ else" << ifCount << endl;
 		break;
 	case 1: //token EQ (equal), else branch is therefore if two values are NE (not equal)
-		out << "\tBNE else" << if_count << endl;
+		out << "\tBNE else" << ifCount << endl;
 		break;
 	case 2: //token GE (greater or equal), else branch is therefore if the first value is LT (less than)
-		out << "\tBLT else" << if_count << endl;
+		out << "\tBLT else" << ifCount << endl;
 		break;
 	case 3: //token LE (less or equal), else branch is therefore if the first value is GT (greater than)
-		out << "\tBGT else" << if_count << endl;
+		out << "\tBGT else" << ifCount << endl;
 		break;
 	case 4: //token GT (greater than), else branch is therefore if the first value is LE (less or equal)
-		out << "\tBLE else" << if_count << endl;
+		out << "\tBLE else" << ifCount << endl;
 		break;
 	case 5: //token LT (less than), else branch is therefore if the first value is GE (greater or equal)
-		out << "\tBGE else" << if_count << endl;
+		out << "\tBGE else" << ifCount << endl;
 		break;
 	}			
 }
