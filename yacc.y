@@ -19,16 +19,21 @@ void addVar(char *);
 void generateAssignment(char *);
 void generateCompare(char *, int);
 void processBuffer();
+void processForBody();
 ofstream out;
 string outFileName;
 VarTable varTable;
 AssignBuffer buffer;
 unsigned long r12 = 0;
-unsigned int ifCount = 1;
-unsigned int loopCount = 1;
-bool inForLoop = false;
-string lastAssigned;
-string dummyForVariable = "";
+unsigned int ifCount = 1;     
+unsigned int loopCount = 1;   /* the variables ifCount and loopCount count the number of if statements and loops in the pascal file,
+			       * and their values are appended to the labels in the assembly file, so that their names are not the same */
+
+bool inForLoop = false;       /* flag set to true whenever processing a for loop
+			       * needed to display an error when trying to modify the dummy variable inside for loop */
+
+string lastAssigned;          //the name of last variable being assigned
+string dummyForVariable = ""; //the name of current dummy variable in the for loop
 
 %}
 
@@ -156,16 +161,7 @@ for_loop		: FOR start_value TO var
 			}
 			  DO for_body
 			{
-				out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE for" << loopCount << endl; //generate COMPARE instruction and corresponding branch if LESS or EQUAL
-				varEntry *dummyVar = varTable.lookup(dummyForVariable); /* after finished loop, need to store the dummy variable to memory
-								its value will be always greater by 1 from the terminating value */
-				out << "\tLDR R12, =0x" << hex << dummyVar->location << endl;
-				r12 = dummyVar->location;
-				out << "\tSTR R10, [R12]\nforend" << loopCount;
-				inForLoop = false;     //mark that it is the end of for loop
-				dummyForVariable = ""; //reset the dummy variable string
-
-				loopCount++;
+				processForBody();
 			}
 			| FOR start_value TO num
 			{
@@ -177,16 +173,7 @@ for_loop		: FOR start_value TO var
 			}
 			  DO for_body
 			{
-				out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE for" << loopCount << endl; //generate COMPARE instruction and corresponding branch if LESS or EQUAL
-				varEntry *dummyVar = varTable.lookup(dummyForVariable); /* after finished loop, need to store the dummy variable to memory
-								its value will be always greater by 1 from the terminating value */
-				out << "\tLDR R12, =0x" << hex << dummyVar->location << endl;
-				r12 = dummyVar->location;
-				out << "\tSTR R10, [R12]\nforend" << loopCount;
-				inForLoop = false;     //mark that it is the end of for loop
-				dummyForVariable = ""; //reset the dummy variable string
-
-				loopCount++;
+				processForBody();
 			};
 
 start_value		: OPAREN assignment_statement CPAREN
@@ -230,7 +217,12 @@ relop			: LT {$$ = 5;}
 
 %%
 int main(int argc, char* argv[])
-{
+{	
+	/* 
+	 *  the correct way to run the program is:
+	 *  ./ARM_mgb10 OUTPUT_FILE_NAME < PASCAL_FILE_PATH
+	 *  therefore any number of command line parameters different than 2 is invalid
+	 */
 	if(argc == 2)
 	{
 		outFileName = argv[1];
@@ -257,7 +249,9 @@ void yyerror(char const *s)
 {
 	cout << "Error: " << s << ", line: " << lineno << endl;
 	
-	out.close();       //quick and effortless way to clear the file which was previously written to
+	/* the next three statements are a quick and effortless way to clear the file which has part of the assembly code
+	 * but since there has been an error in the Pascal source, we want to clear the file */
+	out.close();
 	out.open(outFileName.c_str());
 	out.close();
 	
@@ -361,6 +355,20 @@ void generateCompare(char *n, int c)
 	}			
 }
 
+void processForBody()
+{
+	out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE for" << loopCount << endl; //generate COMPARE instruction and corresponding branch if LESS or EQUAL
+	varEntry *dummyVar = varTable.lookup(dummyForVariable); /* after finished loop, need to store the dummy variable to memory
+								its value will be always greater by 1 from the terminating value */
+	out << "\tLDR R12, =0x" << hex << dummyVar->location << endl;
+	r12 = dummyVar->location;
+	out << "\tSTR R10, [R12]\nforend" << loopCount;
+	inForLoop = false;     //mark that it is the end of for loop
+	dummyForVariable = ""; //reset the dummy variable string
+
+	loopCount++;
+}
+
 void processBuffer()
 {
 	for(int i = 0; i < buffer.getIndex(); i++) //generate data processing code
@@ -387,9 +395,9 @@ void processBuffer()
 			}
 			else
 			{
-				if(currentVar != NULL)
+				if(currentVar != NULL) //if the variable which is on the RHS was declared:
 				{
-					if(currentVar->initialised == false)
+					if(currentVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
 						cout << "Warning: Uninitialised variable '" << currentVar->id << "', line: " << lineno << endl;
 				
 					if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
