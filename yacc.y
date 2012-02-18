@@ -20,6 +20,8 @@ void generateAssignment(char *);
 void generateCompare(char *, int);
 void processBuffer();
 void processForBody();
+void forVarAsFinal(char *);
+void forConstAsFinal(int);
 ofstream out;
 string outFileName;
 VarTable varTable;
@@ -132,31 +134,7 @@ loop_block		: PBEGIN assignment_statements END;
 
 for_loop		: FOR start_value TO var
 			{
-				inForLoop = true;
-				dummyForVariable = lastAssigned;
-				out << "\tMOV R10, R0" << endl;
-
-				varEntry *finalVar = varTable.lookup($4);
-
-				if(finalVar != NULL) //check if the variable which value is used as final has been declared
-				{
-					if(r12 != finalVar->location) //if it has been declared, check if r12 has its address in it
-					{
-						out << "\tLDR R12, =0x" << hex << finalVar->location << endl;
-						r12 = finalVar->location;
-					}
-
-					out << "\tLDR R11, [R12]" << endl; //load the variable to R11
-				}				
-				else                          //if the variable has not been declared, terminate and display error
-				{
-					string err("Undeclared variable '");
-					err.append($4); err.append("'");
-					yyerror(err.c_str());
-				}
-
-				out << "\tCMP R10, R11\n\tBGT forend" << loopCount << endl << "for" << loopCount;
-
+				forVarAsFinal($4);
 				delete $4;
 			}
 			  DO for_body
@@ -165,11 +143,7 @@ for_loop		: FOR start_value TO var
 			}
 			| FOR start_value TO num
 			{
-				inForLoop = true; /*mark that we are in the for loop, need for the generateAssignment() function to check for
-						    trying to assign to the dummy variable which is illegal */
-				dummyForVariable = lastAssigned;     //save the name of the dummy variable
-				out << "\tMOV R10, R0\n\tMOV R11, #0x" << hex << $4 << endl << "\tCMP R10, R11" << endl;
-				out << "\tBGT forend" << loopCount << endl << "for" << loopCount;
+				forConstAsFinal($4);
 			}
 			  DO for_body
 			{
@@ -258,26 +232,26 @@ void yyerror(char const *s)
 	exit(-1);
 }
 
-void addVar(char *i)
+void addVar(char *c)
 {
-	if(varTable.lookup(i) == NULL)    //check if the variable has not been declared already
-		varTable.addVariable(i);
+	if(varTable.lookup(c) == NULL)    //check if the variable has not been declared already
+		varTable.addVariable(c);
 	else				  //if the variable has been already declared, terminate
 	{
 		string err("Redeclared variable '");
-		err.append(i); err.append("'");
+		err.append(c); err.append("'");
 		yyerror(err.c_str());
 	}
 }
 
-void generateAssignment(char *n)
+void generateAssignment(char *c)
 {
-	varEntry *assignVar = varTable.lookup(n); //check if the variable to which assign to was declared
+	varEntry *assignVar = varTable.lookup(c); //check if the variable to which assign to was declared
 		
 	if(assignVar == NULL)          //if the variable has not been declared
 	{
 		string err("Undeclared variable '");
-		err.append(n); err.append("'");
+		err.append(c); err.append("'");
 		yyerror(err.c_str());
 	}
 	
@@ -305,9 +279,9 @@ void generateAssignment(char *n)
 	lastAssigned = assignVar->id;
 }
 
-void generateCompare(char *n, int c)
+void generateCompare(char *c, int i)
 {
-	varEntry *testVar = varTable.lookup(n);
+	varEntry *testVar = varTable.lookup(c);
 
 	if(testVar != NULL) //check if the variable which is being compared has been declared
 	{
@@ -322,7 +296,7 @@ void generateCompare(char *n, int c)
 	else                          //if the variable has not been declared, terminate and display error
 	{
 		string err("Undeclared variable '");
-		err.append(n); err.append("'");
+		err.append(c); err.append("'");
 		yyerror(err.c_str());
 	}
 
@@ -332,7 +306,7 @@ void generateCompare(char *n, int c)
 
 	out << "\tCMP R2, R0" << endl; //compare the variable on the LHS with the expression on the RHS (f.e. 'A >= 2+3')
 
-	switch(c) //generate appropriate branch
+	switch(i) //generate appropriate branch
 	{
 	case 0: //token NE (not equal), else branch is therefore if two values are EQ (equal)
 		out << "\tBEQ else" << ifCount << endl;
@@ -367,6 +341,43 @@ void processForBody()
 	dummyForVariable = ""; //reset the dummy variable string
 
 	loopCount++;
+}
+
+void forVarAsFinal(char *c)
+{
+	inForLoop = true;
+	dummyForVariable = lastAssigned;
+	out << "\tMOV R10, R0" << endl;
+
+	varEntry *finalVar = varTable.lookup(c);
+
+	if(finalVar != NULL) //check if the variable which value is used as final has been declared
+	{
+		if(r12 != finalVar->location) //if it has been declared, check if r12 has its address in it
+		{
+			out << "\tLDR R12, =0x" << hex << finalVar->location << endl;
+			r12 = finalVar->location;
+		}
+
+		out << "\tLDR R11, [R12]" << endl; //load the variable to R11
+	}				
+	else                          //if the variable has not been declared, terminate and display error
+	{
+		string err("Undeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+
+	out << "\tCMP R10, R11\n\tBGT forend" << loopCount << endl << "for" << loopCount;
+}
+
+void forConstAsFinal(int i)
+{
+	inForLoop = true; /*mark that we are in the for loop, need for the generateAssignment() function to check for
+			    trying to assign to the dummy variable which is illegal */
+	dummyForVariable = lastAssigned;     //save the name of the dummy variable
+	out << "\tMOV R10, R0\n\tMOV R11, #0x" << hex << i << endl << "\tCMP R10, R11" << endl;
+	out << "\tBGT forend" << loopCount << endl << "for" << loopCount;
 }
 
 void processBuffer()
