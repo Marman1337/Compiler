@@ -32,7 +32,7 @@ string dummyForVariable = "";
 
 %}
 
-%token PBEGIN END PROGRAM IF THEN ELSE FOR TO DO VAR INT
+%token PBEGIN END PROGRAM IF THEN ELSE FOR TO WHILE DO VAR INT
 PLUS MINUS MUL DIV LT GT LE GE NE EQ
 OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 
@@ -125,18 +125,37 @@ boolean_value		: IDENTIFIER relop expression
 
 loop_block		: PBEGIN assignment_statements END;
 
-for_loop		: FOR start_value TO var DO for_body
-			| FOR start_value
-			  TO num
-			  {
-				inForLoop = true; /*mark that we are in the for loop, need for the generateAssignment() function to check for
-						    trying to assign to the dummy variable which is illegal */
-				dummyForVariable = lastAssigned;     //save the name of the dummy variable
-				out << "\tMOV R10, R0\n\tMOV R11, #0x" << hex << $4 << endl << "\tCMP R10, R11" << endl;
-				out << "\tBGT forend" << loopCount << endl << "for" << loopCount;
-			  }
+for_loop		: FOR start_value TO var
+			{
+				inForLoop = true;
+				dummyForVariable = lastAssigned;
+				out << "\tMOV R10, R0" << endl;
+
+				varEntry *finalVar = varTable.lookup($4);
+
+				if(finalVar != NULL) //check if the variable which value is used as final has been declared
+				{
+					if(r12 != finalVar->location) //if it has been declared, check if r12 has its address in it
+					{
+						out << "\tLDR R12, =0x" << hex << finalVar->location << endl;
+						r12 = finalVar->location;
+					}
+
+					out << "\tLDR R11, [R12]" << endl; //load the variable to R11
+				}				
+				else                          //if the variable has not been declared, terminate and display error
+				{
+					string err("Undeclared variable '");
+					err.append($4); err.append("'");
+					yyerror(err.c_str());
+				}
+
+				out << "\tCMP R10, R11\n\tBGT forend" << loopCount << endl << "for" << loopCount;
+
+				delete $4;
+			}
 			  DO for_body
-			  {
+			{
 				out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE for" << loopCount << endl; //generate COMPARE instruction and corresponding branch if LESS or EQUAL
 				varEntry *dummyVar = varTable.lookup(dummyForVariable); /* after finished loop, need to store the dummy variable to memory
 								its value will be always greater by 1 from the terminating value */
@@ -147,7 +166,28 @@ for_loop		: FOR start_value TO var DO for_body
 				dummyForVariable = ""; //reset the dummy variable string
 
 				loopCount++;
-			  };
+			}
+			| FOR start_value TO num
+			{
+				inForLoop = true; /*mark that we are in the for loop, need for the generateAssignment() function to check for
+						    trying to assign to the dummy variable which is illegal */
+				dummyForVariable = lastAssigned;     //save the name of the dummy variable
+				out << "\tMOV R10, R0\n\tMOV R11, #0x" << hex << $4 << endl << "\tCMP R10, R11" << endl;
+				out << "\tBGT forend" << loopCount << endl << "for" << loopCount;
+			}
+			  DO for_body
+			{
+				out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE for" << loopCount << endl; //generate COMPARE instruction and corresponding branch if LESS or EQUAL
+				varEntry *dummyVar = varTable.lookup(dummyForVariable); /* after finished loop, need to store the dummy variable to memory
+								its value will be always greater by 1 from the terminating value */
+				out << "\tLDR R12, =0x" << hex << dummyVar->location << endl;
+				r12 = dummyVar->location;
+				out << "\tSTR R10, [R12]\nforend" << loopCount;
+				inForLoop = false;     //mark that it is the end of for loop
+				dummyForVariable = ""; //reset the dummy variable string
+
+				loopCount++;
+			};
 
 start_value		: OPAREN assignment_statement CPAREN
 			| assignment_statement;
@@ -162,6 +202,7 @@ expression		: expression addop num
 			| expression addop var
 			{
 				buffer.addEntry($3, 0, $2, false);
+				delete $3;
 			}
 			| num
 			{
@@ -170,6 +211,7 @@ expression		: expression addop num
 			| var
 			{
 				buffer.addEntry($1, 0, true, false);
+				delete $1;
 			};
 
 num			: NUMBER {$$ = $1;};
