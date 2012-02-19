@@ -31,15 +31,11 @@ unsigned int ifCount = 1;
 unsigned int loopCount = 1;   /* the variables ifCount and loopCount count the number of if statements and loops in the pascal file,
 			       * and their values are appended to the labels in the assembly file, so that their names are not the same */
 
-bool inForLoop = false;       /* flag set to true whenever processing a for loop
-			       * needed to display an error when trying to modify the dummy variable inside for loop */
-
 string lastAssigned;          //the name of last variable being assigned
-string dummyForVariable = ""; //the name of current dummy variable in the for loop
 
 %}
 
-%token PBEGIN END PROGRAM IF THEN ELSE FOR TO WHILE DO VAR INT
+%token PBEGIN END PROGRAM IF THEN ELSE TO WHILE DO VAR INT
 PLUS MINUS MUL DIV LT GT LE GE NE EQ
 OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 
@@ -49,6 +45,7 @@ OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 	char *sval;
 	bool bval;
 }
+%token <ival> FOR
 %token <ival> NUMBER
 %token <sval> IDENTIFIER
 %type  <bval> addop
@@ -95,9 +92,6 @@ statement		: assignment_statement
 			| if_statement
 			| for_loop;
 
-assignment_statements	: assignment_statements assignment_statement SEMICOLON
-			| assignment_statement SEMICOLON;
-
 assignment_statement	: IDENTIFIER ASSIGNOP expression
 			{
 				generateAssignment($1);
@@ -114,12 +108,14 @@ if_then_else_statement	: IF boolean_part then_part else_part;
 then_part		: THEN then_body;
 
 then_body		: loop_block
-			| assignment_statement;
+			| assignment_statement
+			| for_loop;
 
 else_part		: ELSE {out << "\tB then" << ifCount << endl << "else" << ifCount;} else_body {out << "then" << ifCount;};
 
 else_body		: loop_block
-			| assignment_statement;
+			| assignment_statement
+			| for_loop;
 
 boolean_part		: OPAREN boolean_value CPAREN
 			| boolean_value;
@@ -130,30 +126,80 @@ boolean_value		: IDENTIFIER relop expression
 				delete $1;
 			};
 
-loop_block		: PBEGIN assignment_statements END;
+loop_block		: PBEGIN loop_statements END;
+
+loop_statements		: loop_statements loop_statement SEMICOLON
+			| loop_statement SEMICOLON;
+
+loop_statement		: assignment_statement
+			| for_loop;
 
 for_loop		: FOR start_value TO var
 			{
-				forVarAsFinal($4);
+
+				$1 = loopCount;
+				loopCount++;
+				out << "\tSUB R0, R0, #0x1" << endl;
+				out << "\tSTR R0, [R12]" << endl;
+				out << "for" << $1 << "\tLDR R12, =0x" << hex << r12 << endl;
+				out << "\tLDR R10, [R12]" << endl;
+				out << "\tADD R10, R10, #1" << endl;
+				out << "\tSTR R10, [R12]" << endl;
+				
+				varEntry *finalVar = varTable.lookup($4);
+
+				if(finalVar != NULL) //check if the variable which value is used as final has been declared
+				{
+					if(r12 != finalVar->location) //if it has been declared, check if r12 has its address in it
+					{
+						out << "\tLDR R12, =0x" << hex << finalVar->location << endl;
+						r12 = finalVar->location;
+					}
+
+					out << "\tLDR R11, [R12]" << endl; //load the variable to R11
+				}				
+				else                          //if the variable has not been declared, terminate and display error
+				{
+					string err("Undeclared variable '");
+					err.append($4); err.append("'");
+					yyerror(err.c_str());
+				}
+				
+				out << "\tCMP R10, R11" << endl;
+				out << "\tBGT forend" << $1 << endl;
+
 				delete $4;
 			}
 			  DO for_body
 			{
-				processForBody();
+				out << "\tB for" << $1 << endl;
+				out << "forend" << $1;
 			}
 			| FOR start_value TO num
 			{
-				forConstAsFinal($4);
+				$1 = loopCount;
+				loopCount++;
+				out << "\tSUB R0, R0, #0x1" << endl;
+				out << "\tSTR R0, [R12]" << endl;
+				out << "for" << $1 << "\tLDR R12, =0x" << hex << r12 << endl;
+				out << "\tLDR R10, [R12]" << endl;
+				out << "\tADD R10, R10, #1" << endl;
+				out << "\tSTR R10, [R12]" << endl;
+				out << "\tMOV R11, #0x" << hex << $4 << endl;
+				out << "\tCMP R10, R11" << endl;
+				out << "\tBGT forend" << $1 << endl;
 			}
 			  DO for_body
 			{
-				processForBody();
+				out << "\tB for" << $1 << endl;
+				out << "forend" << $1;
 			};
 
 start_value		: OPAREN assignment_statement CPAREN
 			| assignment_statement;
 
 for_body		: loop_block
+			| for_loop
 			| assignment_statement;
 
 expression		: expression addop num
@@ -253,14 +299,6 @@ void generateAssignment(char *c)
 		string err("Undeclared variable '");
 		err.append(c); err.append("'");
 		yyerror(err.c_str());
-	}
-	
-	if(inForLoop == true && assignVar->id == dummyForVariable)
-	{
-		string err("Trying to modify the for loop dummy variable '");
-		err.append(dummyForVariable); err.append("'");
-		err.append(" inside the for loop body. Illegal");
-		yyerror(err.c_str());
 	}	
 
 	out << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
@@ -331,53 +369,17 @@ void generateCompare(char *c, int i)
 
 void processForBody()
 {
-	out << "\tADD R10, R10, #0x1\n\tCMP R10, R11\n\tBLE for" << loopCount << endl; //generate COMPARE instruction and corresponding branch if LESS or EQUAL
-	varEntry *dummyVar = varTable.lookup(dummyForVariable); /* after finished loop, need to store the dummy variable to memory
-								its value will be always greater by 1 from the terminating value */
-	out << "\tLDR R12, =0x" << hex << dummyVar->location << endl;
-	r12 = dummyVar->location;
-	out << "\tSTR R10, [R12]\nforend" << loopCount;
-	inForLoop = false;     //mark that it is the end of for loop
-	dummyForVariable = ""; //reset the dummy variable string
 
-	loopCount++;
 }
 
 void forVarAsFinal(char *c)
 {
-	inForLoop = true;
-	dummyForVariable = lastAssigned;
-	out << "\tMOV R10, R0" << endl;
 
-	varEntry *finalVar = varTable.lookup(c);
-
-	if(finalVar != NULL) //check if the variable which value is used as final has been declared
-	{
-		if(r12 != finalVar->location) //if it has been declared, check if r12 has its address in it
-		{
-			out << "\tLDR R12, =0x" << hex << finalVar->location << endl;
-			r12 = finalVar->location;
-		}
-
-		out << "\tLDR R11, [R12]" << endl; //load the variable to R11
-	}				
-	else                          //if the variable has not been declared, terminate and display error
-	{
-		string err("Undeclared variable '");
-		err.append(c); err.append("'");
-		yyerror(err.c_str());
-	}
-
-	out << "\tCMP R10, R11\n\tBGT forend" << loopCount << endl << "for" << loopCount;
 }
 
 void forConstAsFinal(int i)
 {
-	inForLoop = true; /*mark that we are in the for loop, need for the generateAssignment() function to check for
-			    trying to assign to the dummy variable which is illegal */
-	dummyForVariable = lastAssigned;     //save the name of the dummy variable
-	out << "\tMOV R10, R0\n\tMOV R11, #0x" << hex << i << endl << "\tCMP R10, R11" << endl;
-	out << "\tBGT forend" << loopCount << endl << "for" << loopCount;
+
 }
 
 void processBuffer()
@@ -397,39 +399,29 @@ void processBuffer()
 		{
 			varEntry *currentVar = varTable.lookup(temp->id);       //get appropriate entry from the variables symbol table
 
-			if(inForLoop == true && currentVar->id == dummyForVariable)  //if we are in for loop and the dummy variable is on the RHS of the assignment
+			if(currentVar != NULL) //if the variable which is on the RHS was declared:
 			{
-				if(temp->addition == true)
-					out << "\tADD R0, R0, R10" << endl;
-				else
-					out << "\tSUB R0, R0, R10" << endl;
-			}
-			else
-			{
-				if(currentVar != NULL) //if the variable which is on the RHS was declared:
-				{
-					if(currentVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
-						cout << "Warning: Uninitialised variable '" << currentVar->id << "', line: " << lineno << endl;
+				if(currentVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
+					cout << "Warning: Uninitialised variable '" << currentVar->id << "', line: " << lineno << endl;
 				
-					if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
-					{
-						out << "\tLDR R12, =0x" << hex << currentVar->location << endl;
-						r12 = currentVar->location;
-					}
-
-					out << "\tLDR R1, [R12]" << endl;
-
-					if(temp->addition == true)
-						out << "\tADD R0, R0, R1" << endl;
-					else
-						out << "\tSUB R0, R0, R1" << endl;
-				}
-				else //if it wasn't declared, terminate and display error
+				if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
 				{
-					string err("Undeclared variable '");
-					err.append(currentVar->id); err.append("'");
-					yyerror(err.c_str());
+					out << "\tLDR R12, =0x" << hex << currentVar->location << endl;
+					r12 = currentVar->location;
 				}
+
+				out << "\tLDR R1, [R12]" << endl;
+
+				if(temp->addition == true)
+					out << "\tADD R0, R0, R1" << endl;
+				else
+					out << "\tSUB R0, R0, R1" << endl;
+			}
+			else //if it wasn't declared, terminate and display error
+			{
+				string err("Undeclared variable '");
+				err.append(currentVar->id); err.append("'");
+				yyerror(err.c_str());
 			}
 		}
 	}
