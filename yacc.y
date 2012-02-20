@@ -101,7 +101,7 @@ assignment_statement	: IDENTIFIER ASSIGNOP expression
 if_statement		: if_then_statement {r12 = 0; ifCount++;}
 			| if_then_else_statement {r12 = 0; ifCount++;};
 
-if_then_statement	: IF boolean_part then_part {out << "else" << ifCount;};
+if_then_statement	: IF boolean_part then_part {out << "else" << ifCount << endl;};
 
 if_then_else_statement	: IF boolean_part then_part else_part;
 
@@ -111,7 +111,7 @@ then_body		: loop_block
 			| assignment_statement
 			| for_loop;
 
-else_part		: ELSE {out << "\tB then" << ifCount << endl << "else" << ifCount;} else_body {out << "then" << ifCount;};
+else_part		: ELSE {out << "\tB then" << ifCount << endl << "else" << ifCount << endl;} else_body {out << "then" << ifCount << endl;};
 
 else_body		: loop_block
 			| assignment_statement
@@ -139,9 +139,9 @@ for_loop		: FOR start_value TO var
 
 				$1 = loopCount;
 				loopCount++;
-				out << "\tSUB R0, R0, #0x1" << endl;
+				out << "\tSUB R0, R0, #0x2" << endl;
 				out << "\tSTR R0, [R12]" << endl;
-				out << "for" << $1 << "\tLDR R12, =0x" << hex << r12 << endl;
+				out << "for" << $1 << endl << "\tLDR R12, =0x" << hex << r12 << endl;
 				out << "\tLDR R10, [R12]" << endl;
 				out << "\tADD R10, R10, #1" << endl;
 				out << "\tSTR R10, [R12]" << endl;
@@ -166,33 +166,35 @@ for_loop		: FOR start_value TO var
 				}
 				
 				out << "\tCMP R10, R11" << endl;
-				out << "\tBGT forend" << $1 << endl;
+				out << "\tBEQ forend" << $1 << endl;
 
 				delete $4;
 			}
 			  DO for_body
 			{
 				out << "\tB for" << $1 << endl;
-				out << "forend" << $1;
+				out << "forend" << $1 << endl;
+				r12 = 0;
 			}
 			| FOR start_value TO num
 			{
 				$1 = loopCount;
 				loopCount++;
-				out << "\tSUB R0, R0, #0x1" << endl;
+				out << "\tSUB R0, R0, #0x2" << endl;
 				out << "\tSTR R0, [R12]" << endl;
-				out << "for" << $1 << "\tLDR R12, =0x" << hex << r12 << endl;
+				out << "for" << $1 << endl << "\tLDR R12, =0x" << hex << r12 << endl;
 				out << "\tLDR R10, [R12]" << endl;
 				out << "\tADD R10, R10, #1" << endl;
 				out << "\tSTR R10, [R12]" << endl;
 				out << "\tMOV R11, #0x" << hex << $4 << endl;
 				out << "\tCMP R10, R11" << endl;
-				out << "\tBGT forend" << $1 << endl;
+				out << "\tBEQ forend" << $1 << endl;
 			}
 			  DO for_body
 			{
 				out << "\tB for" << $1 << endl;
-				out << "forend" << $1;
+				out << "forend" << $1 << endl;
+				r12 = 0;
 			};
 
 start_value		: OPAREN assignment_statement CPAREN
