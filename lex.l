@@ -21,6 +21,8 @@ int lineno = 1;
 (WHILE|while)			{return WHILE;}
 (VAR|var)			{return VAR;}
 (INTEGER|integer)		{return INT;}
+(write)				{return WRITE;}
+(read)				{return READ;}
 "+"				{return PLUS;}
 "-"				{return MINUS;}
 "*"				{return MUL;}

@@ -19,9 +19,8 @@ void addVar(char *);
 void generateAssignment(char *);
 void generateCompare(char *, int);
 void processBuffer();
-void processForBody();
-void forVarAsFinal(char *);
-void forConstAsFinal(int);
+void writeHeaders();
+void loadVar(char*, bool);
 ofstream out;
 string outFileName;
 VarTable varTable;
@@ -36,7 +35,7 @@ string lastAssigned;          //the name of last variable being assigned
 %}
 
 %token PBEGIN END PROGRAM IF THEN ELSE TO WHILE DO VAR INT
-PLUS MINUS MUL DIV LT GT LE GE NE EQ
+PLUS MINUS MUL DIV LT GT LE GE NE EQ READ WRITE
 OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 
 %union
@@ -62,7 +61,9 @@ program			: /* empty program */
 
 program_header		: PROGRAM IDENTIFIER SEMICOLON
 			{
-				out << "\tAREA " << $2 << ",CODE,READWRITE\n\n\tENTRY\n\n";
+				out << "\tAREA " << $2 << ",CODE,READWRITE" << endl << endl;
+				writeHeaders();
+				out << endl << "\tENTRY" << endl << endl;
 				delete $2;
 			};
 
@@ -90,7 +91,9 @@ statement_list		: statement_list statement SEMICOLON
 
 statement		: assignment_statement
 			| if_statement
-			| for_loop;
+			| for_loop
+			| readVar
+			| writeVar;
 
 assignment_statement	: IDENTIFIER ASSIGNOP expression
 			{
@@ -112,12 +115,16 @@ then_part		: THEN then_body {r12 = 0;};
 then_body		: loop_block
 			| assignment_statement
 			| for_loop
-			| if_statement;
+			| if_statement
+			| readVar
+			| writeVar;
 
 else_body		: loop_block
 			| assignment_statement
 			| for_loop
-			| if_statement;
+			| if_statement
+			| readVar
+			| writeVar;
 
 boolean_part		: OPAREN boolean_value CPAREN
 			| boolean_value;
@@ -135,7 +142,9 @@ loop_statements		: loop_statements loop_statement SEMICOLON
 
 loop_statement		: assignment_statement
 			| for_loop
-			| if_statement;
+			| if_statement
+			| readVar
+			| writeVar;
 
 for_loop		: FOR start_value TO var
 			{
@@ -206,7 +215,9 @@ start_value		: OPAREN assignment_statement CPAREN
 for_body		: loop_block
 			| for_loop
 			| assignment_statement
-			| if_statement;
+			| if_statement
+			| readVar
+			| writeVar;
 
 expression		: expression addop num
 			{
@@ -225,6 +236,25 @@ expression		: expression addop num
 			{
 				buffer.addEntry($1, 0, true, false);
 				delete $1;
+			};
+
+readVar			: READ OPAREN IDENTIFIER CPAREN 
+			{
+				out << "\tBL READR3_" << endl;
+
+				loadVar($3, false);
+
+				out << "\tSTR R3, [R12]" << endl;
+				delete $3;
+			};
+
+writeVar		: WRITE OPAREN IDENTIFIER CPAREN
+			{
+				loadVar($3, true);
+
+				out << "\tLDR R0, [R12]" << endl;
+				out << "\tBL PRINTR0_" << endl;
+				delete $3;
 			};
 
 num			: NUMBER {$$ = $1;};
@@ -282,6 +312,129 @@ void yyerror(char const *s)
 	out.close();
 	
 	exit(-1);
+}
+
+void writeHeaders()
+{
+	out << ";--------------------------------------------------------------------------------" << endl;
+	out << "; SWI constants" << endl;
+	out << ";" << endl << endl;
+
+	out << "SWI_WriteC EQU &0 ; output the character in r0 to the screen" << endl;
+	out << "SWI_Write0 EQU &2 ; Write a null (0) terminated buffer to the screen" << endl;
+	out << "SWI_ReadC EQU &4 ; input character into r0" << endl;
+	out << "SWI_Exit EQU &11 ; finish program" << endl << endl;
+
+	out << "; Allocate memory for the stack--Used by subroutines" << endl;
+	out << ";--------------------------------------------------------------------------------" << endl;
+	out << "STACK_ % 4000 ; reserve space for stack" << endl;
+	out << "STACK_BASE ; base of downward-growing stack + 4" << endl;
+	out << "ALIGN" << endl << endl;
+
+	out << "; Subroutine to print contents of register 0 in decimal" << endl;
+	out << ";--------------------------------------------------------------------------------" << endl;
+	out << "; ** REGISTER DESCRIPTION ** " << endl;
+	out << "; R0 byte to print, carry count" << endl;
+	out << "; R1 number to print" << endl;
+	out << "; R2 ... ,thousands, hundreds, tens, units." << endl;
+	out << "; R3 addresses of constants, automatically incremented" << endl;
+	out << "; R4 holds the address of units" << endl << endl;
+
+	out << "; Allocate 10^9, 10^8, ... 1000, 100, 10, 1" << endl << endl;
+
+	out << "CMP1_ DCD 1000000000" << endl;
+	out << "CMP2_ DCD 100000000" << endl;
+	out << "CMP3_ DCD 10000000" << endl;
+	out << "CMP4_ DCD 1000000" << endl;
+	out << "CMP5_ DCD 100000" << endl;
+	out << "CMP6_ DCD 10000" << endl;
+	out << "CMP7_ DCD 1000" << endl;
+	out << "CMP8_ DCD 100" << endl;
+	out << "CMP9_ DCD 10" << endl;
+	out << "CMP10_ DCD 1" << endl << endl;
+
+	out << "; Entry point" << endl << endl;
+
+	out << "PRINTR0_" << endl;
+	out << "\tSTMED r13!,{r0-r4,r14}" << endl;
+	out << "\tMOV R1, R0" << endl << endl;
+
+	out << "; Is R1 negative?" << endl;
+	out << "\tCMP R1,#0" << endl;
+	out << "\tBPL LDCONST_" << endl;
+	out << "\tRSB R1, R1, #0 ;Get 0-R1, ie positive version of r1" << endl;
+	out << "\tMOV R0, #'-'" << endl;
+	out << "\tSWI SWI_WriteC" << endl << endl;
+
+	out << "; Load starting addresses" << endl << endl;
+
+	out << "LDCONST_" << endl;
+	out << "\tADR R3, CMP1_ ;Used for comparison at the end of printing" << endl;
+	out << "\tADD R4, R3, #40 ;Determine final address (10 word addresses +4 because of post-indexing)" << endl << endl;
+
+	out << "; Take as many right-0's as you can..." << endl << endl;
+
+	out << "NEXT0_" << endl;
+	out << "\tLDR R2, [R3], #4" << endl;
+	out << "\tCMP R2, R1" << endl;
+	out << "\tBHI NEXT0_" << endl << endl;
+
+	out << "; Print all significant characters" << endl << endl;
+
+	out << "NXTCHAR_" << endl;
+	out << "\tMOV R0, #0" << endl;
+	out << "SUBTRACT_" << endl;
+	out << "\tCMP R1, R2" << endl;
+	out << "\tSUBPL R1, R1, R2" << endl;
+	out << "\tADDPL R0,R0, #1" << endl;
+	out << "\tBPL SUBTRACT_" << endl << endl;
+
+	out << "; Output number of Carries" << endl;
+	out << "\tADD R0, R0, #'0'" << endl;
+	out << "\tSWI SWI_WriteC" << endl << endl;
+
+	out << "; Get next constant, ie divide R2/10" << endl;
+	out << "\tLDR R2, [R3], #4" << endl << endl;
+
+	out << "; If we have gone past L10, exit function; else take next character" << endl; 
+	out << "\tCMP R3, R4;" << endl;
+	out << "\tBLE NXTCHAR_;" << endl << endl;
+
+	out << "; Print a line break" << endl;
+	out << "\tMOV R0, #0xA		;0xA is ASCII for newline" << endl;
+	out << "\tSWI SWI_WriteC" << endl << endl;
+
+	out << "; Return" << endl;
+	out << "\tLDMED r13!,{r0-r4,r15}" << endl << endl;
+
+	out << "; Subroutine to read a reasonably large positive decimal number to R3" << endl;
+	out << "; -------------------------------------------------------------------------------" << endl;
+	out << "; The idea is simple:" << endl;
+	out << "; Keep reading new characters until newline character has been read." << endl;
+	out << "; In order to produce meaningful results, the characters are assumed to be digits." << endl;
+	out << "; Other characters are however acceptable, yet their value will correspond to the" << endl;
+	out << "; ASCII value associated with a given character." << endl;
+	out << "; Due to ARM registers being 32-bits wide, trying to enter any number bigger than" << endl;
+	out << "; 0xFFFFFFFF (0d 4 294 967 295) will generate overflow and by consequence" << endl;
+	out << "; garbage output of the subroutine." << endl << endl;
+
+	out << "READR3_				;entry point" << endl << endl;
+	
+	out << "\tSTMED r13!,{r0,r2,r14}\t;push local registers onto the stack" << endl << endl;
+
+	out << "\tMOV R3, #0x0\t\t;initialise the output register" << endl;
+	out << "\tMOV R10, #0xA\t\t;initialise R10 to 10, used for multiplications" << endl;
+	out << "loop" << endl;
+	out << "\tSWI SWI_ReadC\t\t;read char (value in ASCII)" << endl;
+	out << "\tCMP R0, #0xA\t\t;this value corresponds to newline character" << endl;
+	out << "\tBEQ end\t\t\t;stop reading if NEWLINE has been read" << endl;
+	out << "\tSUB R0, R0, #0x30\t;this value is an ASCII offset for digits, subtract it" << endl;
+	out << "\tMOV R2, R3\t\t;temporarily store the current accumulated value in R2, needed for the MUL instruction to work" << endl;
+	out << "\tMUL R3, R2, R10\t\t;multiply the current accumulated value by 10" << endl;
+	out << "\tADD R3, R3, R0\t\t;add the read digit" << endl;
+	out << "\tB loop\t\t\t;branch to read next digit" << endl;
+	out << "end" << endl << endl;
+	out << "\tLDMED r13!,{r0,r2,r15} ;pop local from the stack and return" << endl;
 }
 
 void addVar(char *c)
@@ -373,21 +526,6 @@ void generateCompare(char *c, int i)
 	}			
 }
 
-void processForBody()
-{
-
-}
-
-void forVarAsFinal(char *c)
-{
-
-}
-
-void forConstAsFinal(int i)
-{
-
-}
-
 void processBuffer()
 {
 	for(int i = 0; i < buffer.getIndex(); i++) //generate data processing code
@@ -433,4 +571,30 @@ void processBuffer()
 	}
 	
 	buffer.flush(); //reset the buffer for the next assignment	
+}
+
+void loadVar(char *c, bool write)
+{
+	varEntry *ioVar = varTable.lookup(c);
+
+	if(ioVar != NULL) //check if the variable which is being compared has been declared
+	{
+		if(write == true && ioVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
+			cout << "Warning: Uninitialised variable '" << ioVar->id << "', line: " << lineno << endl;
+
+		if(r12 != ioVar->location) //if it has been declared, check if r12 has its address in it
+		{
+			out << "\tLDR R12, =0x" << hex << ioVar->location << endl;
+			r12 = ioVar->location;
+		}
+	}				
+	else                          //if the variable has not been declared, terminate and display error
+	{
+		string err("Undeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+
+	if(write == false)
+		ioVar->initialised = true;
 }
