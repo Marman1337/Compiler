@@ -49,7 +49,7 @@ OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 %token <ival> NUMBER
 %token <sval> IDENTIFIER
 %type  <bval> addop
-%type  <ival> num relop
+%type  <ival> num relop if
 %type  <sval> var
 
 %%
@@ -98,24 +98,26 @@ assignment_statement	: IDENTIFIER ASSIGNOP expression
 				delete $1; //delete the string of identifier because goes out of scope, no need for memory leak there...
 			}; 
 
-if_statement		: if_then_statement {r12 = 0; ifCount++;}
-			| if_then_else_statement {r12 = 0; ifCount++;};
+if_statement		: if_then_statement {r12 = 0;}
+			| if_then_else_statement {r12 = 0;};
 
-if_then_statement	: IF boolean_part then_part {out << "else" << ifCount << endl;};
+if_then_statement	: if boolean_part then_part {out << "else" << $1 << endl;};
 
-if_then_else_statement	: IF boolean_part then_part else_part;
+if_then_else_statement	: if boolean_part then_part ELSE {out << "\tB then" << $1 << endl << "else" << $1 << endl;} else_body {out << "then" << $1 << endl;};
 
-then_part		: THEN then_body;
+if			: IF {$$ = ifCount++;};
+
+then_part		: THEN then_body {r12 = 0;};
 
 then_body		: loop_block
 			| assignment_statement
-			| for_loop;
-
-else_part		: ELSE {out << "\tB then" << ifCount << endl << "else" << ifCount << endl;} else_body {out << "then" << ifCount << endl;};
+			| for_loop
+			| if_statement;
 
 else_body		: loop_block
 			| assignment_statement
-			| for_loop;
+			| for_loop
+			| if_statement;
 
 boolean_part		: OPAREN boolean_value CPAREN
 			| boolean_value;
@@ -132,7 +134,8 @@ loop_statements		: loop_statements loop_statement SEMICOLON
 			| loop_statement SEMICOLON;
 
 loop_statement		: assignment_statement
-			| for_loop;
+			| for_loop
+			| if_statement;
 
 for_loop		: FOR start_value TO var
 			{
@@ -352,22 +355,22 @@ void generateCompare(char *c, int i)
 	switch(i) //generate appropriate branch
 	{
 	case 0: //token NE (not equal), else branch is therefore if two values are EQ (equal)
-		out << "\tBEQ else" << ifCount << endl;
+		out << "\tBEQ else" << ifCount-1 << endl;
 		break;
 	case 1: //token EQ (equal), else branch is therefore if two values are NE (not equal)
-		out << "\tBNE else" << ifCount << endl;
+		out << "\tBNE else" << ifCount-1 << endl;
 		break;
 	case 2: //token GE (greater or equal), else branch is therefore if the first value is LT (less than)
-		out << "\tBLT else" << ifCount << endl;
+		out << "\tBLT else" << ifCount-1 << endl;
 		break;
 	case 3: //token LE (less or equal), else branch is therefore if the first value is GT (greater than)
-		out << "\tBGT else" << ifCount << endl;
+		out << "\tBGT else" << ifCount-1 << endl;
 		break;
 	case 4: //token GT (greater than), else branch is therefore if the first value is LE (less or equal)
-		out << "\tBLE else" << ifCount << endl;
+		out << "\tBLE else" << ifCount-1 << endl;
 		break;
 	case 5: //token LT (less than), else branch is therefore if the first value is GE (greater or equal)
-		out << "\tBGE else" << ifCount << endl;
+		out << "\tBGE else" << ifCount-1 << endl;
 		break;
 	}			
 }
