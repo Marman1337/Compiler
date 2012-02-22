@@ -27,8 +27,8 @@ string outFileName;
 VarTable varTable;
 AssignBuffer buffer;
 unsigned long r12 = 0;
-unsigned int ifCount = 1;     
-unsigned int loopCount = 1;   /* the variables ifCount and loopCount count the number of if statements and loops in the pascal file,
+unsigned int ifCount = 0;     
+unsigned int loopCount = 0;   /* the variables ifCount and loopCount count the number of if statements and loops in the pascal file,
 			       * and their values are appended to the labels in the assembly file, so that their names are not the same */
 
 string lastAssigned;          //the name of last variable being assigned
@@ -105,7 +105,7 @@ if_then_statement	: if boolean_part then_part {out << "else" << $1 << endl;};
 
 if_then_else_statement	: if boolean_part then_part ELSE {out << "\tB then" << $1 << endl << "else" << $1 << endl;} else_body {out << "then" << $1 << endl;};
 
-if			: IF {$$ = ifCount++;};
+if			: IF {$$ = ++ifCount;};
 
 then_part		: THEN then_body {r12 = 0;};
 
@@ -140,8 +140,7 @@ loop_statement		: assignment_statement
 for_loop		: FOR start_value TO var
 			{
 
-				$1 = loopCount;
-				loopCount++;
+				$1 = ++loopCount;
 				out << "\tSUB R0, R0, #0x1" << endl;
 				out << "\tSTR R0, [R12]" << endl;
 				out << "for" << $1 << endl << "\tLDR R12, =0x" << hex << r12 << endl;
@@ -181,8 +180,7 @@ for_loop		: FOR start_value TO var
 			}
 			| FOR start_value TO num
 			{
-				$1 = loopCount;
-				loopCount++;
+				$1 = ++loopCount;
 				out << "\tSUB R0, R0, #0x1" << endl;
 				out << "\tSTR R0, [R12]" << endl;
 				out << "for" << $1 << endl << "\tLDR R12, =0x" << hex << r12 << endl;
@@ -355,22 +353,22 @@ void generateCompare(char *c, int i)
 	switch(i) //generate appropriate branch
 	{
 	case 0: //token NE (not equal), else branch is therefore if two values are EQ (equal)
-		out << "\tBEQ else" << ifCount-1 << endl;
+		out << "\tBEQ else" << ifCount << endl;
 		break;
 	case 1: //token EQ (equal), else branch is therefore if two values are NE (not equal)
-		out << "\tBNE else" << ifCount-1 << endl;
+		out << "\tBNE else" << ifCount << endl;
 		break;
 	case 2: //token GE (greater or equal), else branch is therefore if the first value is LT (less than)
-		out << "\tBLT else" << ifCount-1 << endl;
+		out << "\tBLT else" << ifCount << endl;
 		break;
 	case 3: //token LE (less or equal), else branch is therefore if the first value is GT (greater than)
-		out << "\tBGT else" << ifCount-1 << endl;
+		out << "\tBGT else" << ifCount << endl;
 		break;
 	case 4: //token GT (greater than), else branch is therefore if the first value is LE (less or equal)
-		out << "\tBLE else" << ifCount-1 << endl;
+		out << "\tBLE else" << ifCount << endl;
 		break;
 	case 5: //token LT (less than), else branch is therefore if the first value is GE (greater or equal)
-		out << "\tBGE else" << ifCount-1 << endl;
+		out << "\tBGE else" << ifCount << endl;
 		break;
 	}			
 }
