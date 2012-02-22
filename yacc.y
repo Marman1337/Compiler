@@ -139,7 +139,7 @@ for_loop		: FOR start_value TO var
 
 				$1 = loopCount;
 				loopCount++;
-				out << "\tSUB R0, R0, #0x2" << endl;
+				out << "\tSUB R0, R0, #0x1" << endl;
 				out << "\tSTR R0, [R12]" << endl;
 				out << "for" << $1 << endl << "\tLDR R12, =0x" << hex << r12 << endl;
 				out << "\tLDR R10, [R12]" << endl;
@@ -166,7 +166,7 @@ for_loop		: FOR start_value TO var
 				}
 				
 				out << "\tCMP R10, R11" << endl;
-				out << "\tBEQ forend" << $1 << endl;
+				out << "\tBGT forend" << $1 << endl;
 
 				delete $4;
 			}
@@ -180,7 +180,7 @@ for_loop		: FOR start_value TO var
 			{
 				$1 = loopCount;
 				loopCount++;
-				out << "\tSUB R0, R0, #0x2" << endl;
+				out << "\tSUB R0, R0, #0x1" << endl;
 				out << "\tSTR R0, [R12]" << endl;
 				out << "for" << $1 << endl << "\tLDR R12, =0x" << hex << r12 << endl;
 				out << "\tLDR R10, [R12]" << endl;
@@ -188,12 +188,14 @@ for_loop		: FOR start_value TO var
 				out << "\tSTR R10, [R12]" << endl;
 				out << "\tMOV R11, #0x" << hex << $4 << endl;
 				out << "\tCMP R10, R11" << endl;
-				out << "\tBEQ forend" << $1 << endl;
+				out << "\tBGT forend" << $1 << endl;
 			}
 			  DO for_body
 			{
 				out << "\tB for" << $1 << endl;
 				out << "forend" << $1 << endl;
+				out << "\tSUB R10, R10, #0x1" << endl;
+				out << "\tSTR R10, [R12]" << endl;
 				r12 = 0;
 			};
 
@@ -202,7 +204,8 @@ start_value		: OPAREN assignment_statement CPAREN
 
 for_body		: loop_block
 			| for_loop
-			| assignment_statement;
+			| assignment_statement
+			| if_statement;
 
 expression		: expression addop num
 			{
