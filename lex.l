@@ -22,6 +22,7 @@ int lineno = 1;
 (VAR|var)			{return VAR;}
 (INTEGER|integer)		{return INT;}
 (write)				{return WRITE;}
+(writeln)			{return WRITELN;}
 (read)				{return READ;}
 "+"				{return PLUS;}
 "-"				{return MINUS;}
