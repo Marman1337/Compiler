@@ -20,7 +20,10 @@ void generateAssignment(char *);
 void generateCompare(char *, int);
 void processBuffer();
 void writeHeaders();
-void loadVar(char*, bool);
+void writeForVar(int, char *);
+void writeForConst(int, int);
+void writeForFooter(int);
+void loadReadWriteVar(char*, bool);
 ofstream out;
 string outFileName;
 VarTable varTable;
@@ -29,8 +32,6 @@ unsigned long r12 = 0;
 unsigned int ifCount = 0;     
 unsigned int loopCount = 0;   /* the variables ifCount and loopCount count the number of if statements and loops in the pascal file,
 			       * and their values are appended to the labels in the assembly file, so that their names are not the same */
-
-string lastAssigned;          //the name of last variable being assigned
 
 %}
 
@@ -56,7 +57,8 @@ OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 program			: /* empty program */
 			| program_header var_declarations block DOT
 			{
-				out << "\n\tEND\n";
+				out << "\tSWI SWI_Exit" << endl;
+				out << "\n\tEND" << endl;
 			};
 
 program_header		: PROGRAM IDENTIFIER SEMICOLON
@@ -148,64 +150,24 @@ loop_statement		: assignment_statement
 
 for_loop		: FOR start_value TO var
 			{
-
 				$1 = ++loopCount;
-				out << "\tSUB R0, R0, #0x1" << endl;
-				out << "\tSTR R0, [R12]" << endl;
-				out << "for" << $1 << endl << "\tLDR R12, =0x" << hex << r12 << endl;
-				out << "\tLDR R10, [R12]" << endl;
-				out << "\tADD R10, R10, #1" << endl;
-				out << "\tSTR R10, [R12]" << endl;
-				
-				varEntry *finalVar = varTable.lookup($4);
-
-				if(finalVar != NULL) //check if the variable which value is used as final has been declared
-				{
-					if(r12 != finalVar->location) //if it has been declared, check if r12 has its address in it
-					{
-						out << "\tLDR R12, =0x" << hex << finalVar->location << endl;
-						r12 = finalVar->location;
-					}
-
-					out << "\tLDR R11, [R12]" << endl; //load the variable to R11
-				}				
-				else                          //if the variable has not been declared, terminate and display error
-				{
-					string err("Undeclared variable '");
-					err.append($4); err.append("'");
-					yyerror(err.c_str());
-				}
-				
-				out << "\tCMP R10, R11" << endl;
-				out << "\tBGT forend" << $1 << endl;
+				writeForVar($1, $4);
 
 				delete $4;
 			}
 			  DO for_body
 			{
-				out << "\tB for" << $1 << endl;
-				out << "forend" << $1 << endl;
+				writeForFooter($1);
 				r12 = 0;
 			}
 			| FOR start_value TO num
 			{
 				$1 = ++loopCount;
-				out << "\tSUB R0, R0, #0x1" << endl;
-				out << "\tSTR R0, [R12]" << endl;
-				out << "for" << $1 << endl << "\tLDR R12, =0x" << hex << r12 << endl;
-				out << "\tLDR R10, [R12]" << endl;
-				out << "\tADD R10, R10, #1" << endl;
-				out << "\tSTR R10, [R12]" << endl;
-				out << "\tMOV R11, #0x" << hex << $4 << endl;
-				out << "\tCMP R10, R11" << endl;
-				out << "\tBGT forend" << $1 << endl;
+				writeForConst($1, $4);
 			}
 			  DO for_body
 			{
-				out << "\tB for" << $1 << endl;
-				out << "forend" << $1 << endl;
-				out << "\tSUB R10, R10, #0x1" << endl;
-				out << "\tSTR R10, [R12]" << endl;
+				writeForFooter($1);
 				r12 = 0;
 			};
 
@@ -242,7 +204,7 @@ readVar			: READ OPAREN IDENTIFIER CPAREN
 			{
 				out << "\tBL READR3_" << endl;
 
-				loadVar($3, false);
+				loadReadWriteVar($3, false);
 
 				out << "\tSTR R3, [R12]" << endl;
 				delete $3;
@@ -250,7 +212,7 @@ readVar			: READ OPAREN IDENTIFIER CPAREN
 
 writeVar		: WRITE OPAREN IDENTIFIER CPAREN
 			{
-				loadVar($3, true);
+				loadReadWriteVar($3, true);
 
 				out << "\tLDR R0, [R12]" << endl;
 				out << "\tBL PRINTR0_" << endl;
@@ -473,7 +435,6 @@ void generateAssignment(char *c)
 	out << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
 	
 	assignVar->initialised = true;		//flag that the variable has been initialised
-	lastAssigned = assignVar->id;
 }
 
 void generateCompare(char *c, int i)
@@ -573,7 +534,7 @@ void processBuffer()
 	buffer.flush(); //reset the buffer for the next assignment	
 }
 
-void loadVar(char *c, bool write)
+void loadReadWriteVar(char *c, bool write)
 {
 	varEntry *ioVar = varTable.lookup(c);
 
@@ -597,4 +558,55 @@ void loadVar(char *c, bool write)
 
 	if(write == false)
 		ioVar->initialised = true;
+}
+
+void writeForVar(int loop, char *c)
+{
+	out << "\tSUB R0, R0, #0x1" << endl;
+	out << "\tSTR R0, [R12]" << endl;
+	out << "for" << loop << endl << "\tLDR R12, =0x" << hex << r12 << endl;
+	out << "\tLDR R10, [R12]" << endl;
+	out << "\tADD R10, R10, #1" << endl;
+	out << "\tSTR R10, [R12]" << endl;
+				
+	varEntry *finalVar = varTable.lookup(c);
+
+	if(finalVar != NULL) //check if the variable which value is used as final has been declared
+	{
+		if(r12 != finalVar->location) //if it has been declared, check if r12 has its address in it
+		{
+			out << "\tLDR R12, =0x" << hex << finalVar->location << endl;
+			r12 = finalVar->location;
+		}
+
+		out << "\tLDR R11, [R12]" << endl; //load the variable to R11
+	}				
+	else                          //if the variable has not been declared, terminate and display error
+	{
+		string err("Undeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+				
+	out << "\tCMP R10, R11" << endl;
+	out << "\tBGT forend" << loop << endl;
+}
+
+void writeForConst(int loop, int final)
+{
+	out << "\tSUB R0, R0, #0x1" << endl;
+	out << "\tSTR R0, [R12]" << endl;
+	out << "for" << loop << endl << "\tLDR R12, =0x" << hex << r12 << endl;
+	out << "\tLDR R10, [R12]" << endl;
+	out << "\tADD R10, R10, #1" << endl;
+	out << "\tSTR R10, [R12]" << endl;
+	out << "\tMOV R11, #0x" << hex << final << endl;
+	out << "\tCMP R10, R11" << endl;
+	out << "\tBGT forend" << loop << endl;
+}
+
+void writeForFooter(int n)
+{
+	out << "\tB for" << n << endl;
+	out << "forend" << n << endl;
 }
