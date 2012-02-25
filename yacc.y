@@ -501,8 +501,8 @@ void generateCompare(char *c, int i)
 
 	if(testVar != NULL) //check if the variable which is being compared has been declared
 	{
-		if(testVarVar->initialised == false) //if the variable on the LHS has not been initialised, display a warning
-			cout << "Warning: Uninitialised variable '" << testVarVar->id << "', line: " << lineno << endl;
+		if(testVar->initialised == false) //if the variable on the LHS has not been initialised, display a warning
+			cout << "Warning: Uninitialised variable '" << testVar->id << "', line: " << lineno << endl;
 
 		if(r12 != testVar->location) //if it has been declared, check if r12 has its address in it
 		{
