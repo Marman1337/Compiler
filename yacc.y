@@ -230,7 +230,7 @@ writeN			: WRITE OPAREN IDENTIFIER CPAREN
 				int i = 0;
 				while($3[i] != '\0')
 				{
-					out << "\tMOV R0, #0x" << hex << (int)$3[i] << endl;
+					out << "\tMOV R0, #0x" << hex << (int)$3[i] << "\t\t;" << $3[i] << endl;
 					out << "\tSWI SWI_WriteC" << endl;
 					i++;
 				}
@@ -251,7 +251,7 @@ writeln			: WRITELN OPAREN IDENTIFIER CPAREN
 				int i = 0;
 				while($3[i] != '\0')
 				{
-					out << "\tMOV R0, #0x" << hex << (int)$3[i] << endl;
+					out << "\tMOV R0, #0x" << hex << (int)$3[i] << "\t\t;" << $3[i] << endl;
 					out << "\tSWI SWI_WriteC" << endl;
 					i++;
 				}
@@ -501,6 +501,9 @@ void generateCompare(char *c, int i)
 
 	if(testVar != NULL) //check if the variable which is being compared has been declared
 	{
+		if(testVarVar->initialised == false) //if the variable on the LHS has not been initialised, display a warning
+			cout << "Warning: Uninitialised variable '" << testVarVar->id << "', line: " << lineno << endl;
+
 		if(r12 != testVar->location) //if it has been declared, check if r12 has its address in it
 		{
 			out << "\tLDR R12, =0x" << hex << testVar->location << endl;

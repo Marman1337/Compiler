@@ -1,7 +1,6 @@
 program sample1;
-var 	A, B, C : integer;
+var 	A : integer;
 begin
-	A := 3;
-	B := A-1;
-	C := A+B-3;
+	A := 3+4+5+7-7;
+	
 end.
