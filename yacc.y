@@ -48,6 +48,7 @@ OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 %token <ival> FOR
 %token <ival> NUMBER
 %token <sval> IDENTIFIER
+%token <sval> TEXT
 %type  <bval> addop
 %type  <ival> num relop if
 %type  <sval> var
@@ -223,6 +224,17 @@ writeN			: WRITE OPAREN IDENTIFIER CPAREN
 				out << "\tMOV R5, #0x1" << endl; //0x0 for writeln, 0x1 for write
 				out << "\tBL PRINTR0_" << endl;
 				delete[] $3;
+			}
+			| WRITE OPAREN TEXT CPAREN
+			{
+				int i = 0;
+				while($3[i] != '\0')
+				{
+					out << "\tMOV R0, #0x" << hex << (int)$3[i] << endl;
+					out << "\tSWI SWI_WriteC" << endl;
+					i++;
+				}
+				delete[] $3;
 			};
 
 writeln			: WRITELN OPAREN IDENTIFIER CPAREN
@@ -232,6 +244,19 @@ writeln			: WRITELN OPAREN IDENTIFIER CPAREN
 				out << "\tLDR R0, [R12]" << endl;
 				out << "\tMOV R5, #0x0" << endl; //0x0 for writeln, 0x1 for write
 				out << "\tBL PRINTR0_" << endl;
+				delete[] $3;
+			}
+			| WRITELN OPAREN TEXT CPAREN
+			{
+				int i = 0;
+				while($3[i] != '\0')
+				{
+					out << "\tMOV R0, #0x" << hex << (int)$3[i] << endl;
+					out << "\tSWI SWI_WriteC" << endl;
+					i++;
+				}
+				out << "\tMOV R0, #0xA" << endl;
+				out << "\tSWI SWI_WriteC" << endl;
 				delete[] $3;
 			};
 

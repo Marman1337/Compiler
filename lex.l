@@ -7,6 +7,7 @@ int lineno = 1;
 %option noyywrap
 %x comment1
 %x comment2
+%x text
 
 %%
 (BEGIN|begin)			{return PBEGIN;}
@@ -57,6 +58,11 @@ int lineno = 1;
 <comment2>"*"+[^*\)\n\r]*	{}
 <comment2>[\n\r]		{lineno++;}
 <comment2>"*"+")"		BEGIN(INITIAL);
+
+"\""				BEGIN(text);
+<text>[^\"\n\r]*		{char *res = new char[strlen(yytext)+1]; strcpy(res,yytext); yylval.sval = res; return TEXT;}
+<text>[\n\r]			{lineno++; BEGIN(INITIAL);}
+<text>"\""			BEGIN(INITIAL);
 
 \/\/.*				{}			/* matches // ... comments */
 
