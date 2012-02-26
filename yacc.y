@@ -29,13 +29,13 @@ string outFileName;
 VarTable varTable;
 AssignBuffer buffer;
 unsigned long r12 = 0;
-unsigned int ifCount = 0;     
-unsigned int loopCount = 0;   /* the variables ifCount and loopCount count the number of if statements and loops in the pascal file,
+unsigned int ifWhileCount = 0;     
+unsigned int loopCount = 0;   /* the variables ifWhileCount and loopCount count the number of if/while statements and for loops in the pascal file,
 			       * and their values are appended to the labels in the assembly file, so that their names are not the same */
 
 %}
 
-%token PBEGIN END PROGRAM IF THEN ELSE TO WHILE DO VAR INT
+%token PBEGIN END PROGRAM IF THEN ELSE TO DO VAR INT
 PLUS MINUS MUL DIV LT GT LE GE NE EQ READ WRITE WRITELN
 OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 
@@ -46,6 +46,7 @@ OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 	bool bval;
 }
 %token <ival> FOR
+%token <ival> WHILE
 %token <ival> NUMBER
 %token <sval> IDENTIFIER
 %token <sval> TEXT
@@ -95,6 +96,7 @@ statement_list		: statement_list statement SEMICOLON
 statement		: assignment_statement
 			| if_statement
 			| for_loop
+			| while_loop
 			| readVar
 			| writeN
 			| writeln;
@@ -112,13 +114,14 @@ if_then_statement	: if boolean_part then_part {out << "else" << $1 << endl;};
 
 if_then_else_statement	: if boolean_part then_part ELSE {out << "\tB then" << $1 << endl << "else" << $1 << endl;} else_body {out << "then" << $1 << endl;};
 
-if			: IF {$$ = ++ifCount;};
+if			: IF {$$ = ++ifWhileCount;};
 
 then_part		: THEN then_body {r12 = 0;};
 
 then_body		: loop_block
 			| assignment_statement
 			| for_loop
+			| while_loop
 			| if_statement
 			| readVar
 			| writeN
@@ -127,6 +130,7 @@ then_body		: loop_block
 else_body		: loop_block
 			| assignment_statement
 			| for_loop
+			| while_loop
 			| if_statement
 			| readVar
 			| writeN
@@ -148,6 +152,7 @@ loop_statements		: loop_statements loop_statement SEMICOLON
 
 loop_statement		: assignment_statement
 			| for_loop
+			| while_loop
 			| if_statement
 			| readVar
 			| writeN
@@ -181,6 +186,18 @@ start_value		: OPAREN assignment_statement CPAREN
 
 for_body		: loop_block
 			| for_loop
+			| while_loop
+			| assignment_statement
+			| if_statement
+			| readVar
+			| writeN
+			| writeln;
+
+while_loop		: WHILE {$1 = ++ifWhileCount; out << "while" << ifWhileCount << endl;} boolean_part while_body {out << "\tB while" << $1 << endl << "else" << $1 << endl;};
+
+while_body		: loop_block
+			| for_loop
+			| while_loop
 			| assignment_statement
 			| if_statement
 			| readVar
@@ -528,22 +545,22 @@ void generateCompare(char *c, int i)
 	switch(i) //generate appropriate branch
 	{
 	case 0: //token NE (not equal), else branch is therefore if two values are EQ (equal)
-		out << "\tBEQ else" << ifCount << endl;
+		out << "\tBEQ else" << ifWhileCount << endl;
 		break;
 	case 1: //token EQ (equal), else branch is therefore if two values are NE (not equal)
-		out << "\tBNE else" << ifCount << endl;
+		out << "\tBNE else" << ifWhileCount << endl;
 		break;
 	case 2: //token GE (greater or equal), else branch is therefore if the first value is LT (less than)
-		out << "\tBLT else" << ifCount << endl;
+		out << "\tBLT else" << ifWhileCount << endl;
 		break;
 	case 3: //token LE (less or equal), else branch is therefore if the first value is GT (greater than)
-		out << "\tBGT else" << ifCount << endl;
+		out << "\tBGT else" << ifWhileCount << endl;
 		break;
 	case 4: //token GT (greater than), else branch is therefore if the first value is LE (less or equal)
-		out << "\tBLE else" << ifCount << endl;
+		out << "\tBLE else" << ifWhileCount << endl;
 		break;
 	case 5: //token LT (less than), else branch is therefore if the first value is GE (greater or equal)
-		out << "\tBGE else" << ifCount << endl;
+		out << "\tBGE else" << ifWhileCount << endl;
 		break;
 	}			
 }
