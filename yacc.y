@@ -230,48 +230,49 @@ readVar			: READ OPAREN IDENTIFIER CPAREN
 				delete[] $3.id;
 			};
 
-writeN			: WRITE OPAREN IDENTIFIER CPAREN
-			{
-				loadReadWriteVar($3.id, true);
+writeN			: WRITE OPAREN write_body CPAREN;
 
-				out << "\tLDR R0, [R12]" << endl;
-				out << "\tMOV R5, #0x1" << endl; //0x0 for writeln, 0x1 for write
-				out << "\tBL PRINTR0_" << endl;
-				delete[] $3.id;
-			}
-			| WRITE OPAREN TEXT CPAREN
+writeln			: WRITELN OPAREN write_body CPAREN
 			{
-				int i = 0;
-				while($3[i] != '\0')
-				{
-					out << "\tMOV R0, #0x" << hex << (int)$3[i] << "\t\t;" << $3[i] << endl;
-					out << "\tSWI SWI_WriteC" << endl;
-					i++;
-				}
-				delete[] $3;
-			};
-
-writeln			: WRITELN OPAREN IDENTIFIER CPAREN
-			{
-				loadReadWriteVar($3.id, true);
-
-				out << "\tLDR R0, [R12]" << endl;
-				out << "\tMOV R5, #0x0" << endl; //0x0 for writeln, 0x1 for write
-				out << "\tBL PRINTR0_" << endl;
-				delete[] $3.id;
-			}
-			| WRITELN OPAREN TEXT CPAREN
-			{
-				int i = 0;
-				while($3[i] != '\0')
-				{
-					out << "\tMOV R0, #0x" << hex << (int)$3[i] << "\t\t;" << $3[i] << endl;
-					out << "\tSWI SWI_WriteC" << endl;
-					i++;
-				}
 				out << "\tMOV R0, #0xA" << endl;
 				out << "\tSWI SWI_WriteC" << endl;
+			};
+
+write_body		: write_body COMMA TEXT
+			{
+				int i = 0;
+				while($3[i] != '\0')
+				{
+					out << "\tMOV R0, #0x" << hex << (int)$3[i] << "\t\t;" << $3[i] << endl;
+					out << "\tSWI SWI_WriteC" << endl;
+					i++;
+				}
 				delete[] $3;
+			}
+			| write_body COMMA IDENTIFIER
+			{
+				loadReadWriteVar($3.id, true);
+				out << "\tLDR R0, [R12]" << endl;
+				out << "\tBL PRINTR0_" << endl;
+				delete[] $3.id;
+			}
+			| TEXT
+			{
+				int i = 0;
+				while($1[i] != '\0')
+				{
+					out << "\tMOV R0, #0x" << hex << (int)$1[i] << "\t\t;" << $1[i] << endl;
+					out << "\tSWI SWI_WriteC" << endl;
+					i++;
+				}
+				delete[] $1;
+			}
+			| IDENTIFIER
+			{
+				loadReadWriteVar($1.id, true);
+				out << "\tLDR R0, [R12]" << endl;
+				out << "\tBL PRINTR0_" << endl;
+				delete[] $1.id;
 			};
 
 expression		: expression addop term
@@ -669,7 +670,7 @@ void writeHeaders()
 	out << "CMP7_ DCD 1000" << endl;
 	out << "CMP8_ DCD 100" << endl;
 	out << "CMP9_ DCD 10" << endl;
-	out << "CMP10_ DCD 1" << endl;
+	out << "CMP10_ DCD 1" << endl << endl;
 
 	out << ";Entry point" << endl << endl;
 
@@ -679,7 +680,7 @@ void writeHeaders()
 	out << "\tCMP R0, #0x0" << endl;
 	out << "\tMOVEQ R0, #0x30" << endl;
 	out << "\tSWIEQ SWI_WriteC" << endl;
-	out << "\tBEQ newl" << endl << endl;
+	out << "\tBEQ printEnd" << endl << endl;
 
 	out << "\tMOV R1, R0" << endl << endl;
 
@@ -716,10 +717,7 @@ void writeHeaders()
 	out << "\tCMP R3, R4 			;if we have gone past L10, exit function; else take next character" << endl;
 	out << "\tBLE NXTCHAR_" << endl << endl;
 
-	out << "newl				;print a line bereak" << endl;
-	out << "\tCMP R5, #0x0			;0 corresponds to writeln, 1 to write" << endl;
-	out << "\tMOVEQ R0, #0xA		;0xA is ASCII for newline" << endl;
-	out << "\tSWIEQ SWI_WriteC" << endl << endl;
+	out << "printEnd			;end" << endl;
 
 	out << "\tLDMED r13!,{r0-r4,r15} 	;return" << endl << endl << endl;
 
@@ -732,7 +730,7 @@ void writeHeaders()
 	out << "; ASCII value associated with a given character." << endl;
 	out << "; Due to ARM registers being 32-bits wide, trying to enter any number bigger than" << endl;
 	out << "; 0xFFFFFFFF (0d 4 294 967 295) will generate overflow and by consequence" << endl;
-	out << "; garbage output of the subroutine." << endl << endl;;
+	out << "; garbage output of the subroutine." << endl << endl;
 
 	out << "READR3_				;entry point" << endl << endl;
 
@@ -769,16 +767,22 @@ void writeHeaders()
 	out << "\tCMP R1, #0x1		;if the first chracter was a minus" << endl;
 	out << "\tRSBEQ R3, R3, #0x0	;get the negative value of R3" << endl << endl;
 	
-	out << "\tLDMED r13!,{r0,r1,r2,r15}  ;pop values from the stack and return" << endl << endl;
+	out << "\tLDMED r13!,{r0,r1,r2,r15}  ;pop values from the stack and return" << endl << endl << endl;
+
+	out << "; Subroutine to divide R2 by R3 and put the result in R1" << endl;
+	out << "; -------------------------------------------------------------------------------" << endl;
+	out << "; We keep subtracting R3 from R2 until we reach 0 or negative value" << endl;
+	out << "; With each subtraction that does not yield in 0 or negative value in R2" << endl;
+	out << "; we increment R0 which is the output of the subroutine" << endl << endl;
 
 	out << "DIVR2R3" << endl;
 	out<< "\tSTMED r13!, {r2,r3,r14}	;push registers on stack" << endl;
-	out<< "\tMOV R1, #0x0" << endl;
+	out<< "\tMOV R1, #0x0			;initialise R1 (the output) to 0" << endl;
 	out<< "loopdiv" << endl;
 	out<< "\tSUB R2, R2, R3			;subtract divisor from dividend" << endl;
 	out<< "\tCMP R2, #0x0			;check if we went negative already" << endl;
 	out<< "\tADDGE R1, R1, #0x1		;if positive, or 0, increment R1 (the output)" << endl;
 	out<< "\tBGT loopdiv			;if positive, perform the subtraction again (no need to branch if 0)" << endl;
 
-	out<< "\tLDMED r13!, {r2,r3,r15}	;pop registers from stack" << endl;
+	out<< "\tLDMED r13!, {r2,r3,r15}	;pop registers from stack" << endl << endl;
 }
