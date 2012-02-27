@@ -45,8 +45,8 @@ int lineno = 1;
 [\n\r]				{lineno++;}
 [ \t]+ 				{}			 /* ignore whitespacee */
 
-[a-zA-Z][a-zA-Z0-9]*		{char *res = new char[strlen(yytext)+1]; strcpy(res,yytext); yylval.sval = res; return IDENTIFIER;}
-[0-9]+				{yylval.ival = atoi(yytext); return NUMBER;}
+[a-zA-Z][a-zA-Z0-9]*		{char *res = new char[strlen(yytext)+1]; strcpy(res,yytext); yylval.termType.id = res; return IDENTIFIER;}
+[0-9]+				{char *res = new char[strlen(yytext)+1]; strcpy(res,yytext); yylval.termType.id = res; return NUMBER;}
 
 "{"				BEGIN(comment1);	 /* matches { ... } comments and counts newlines */
 <comment1>[^}\n\r]*		{}
@@ -59,10 +59,10 @@ int lineno = 1;
 <comment2>[\n\r]		{lineno++;}
 <comment2>"*"+")"		BEGIN(INITIAL);
 
-"\""				BEGIN(text);
-<text>[^\"\n\r]*		{char *res = new char[strlen(yytext)+1]; strcpy(res,yytext); yylval.sval = res; return TEXT;}
+"\'"				BEGIN(text);
+<text>[^\'\n\r]*		{char *res = new char[strlen(yytext)+1]; strcpy(res,yytext); yylval.sval = res; return TEXT;}
 <text>[\n\r]			{lineno++; BEGIN(INITIAL);}
-<text>"\""			BEGIN(INITIAL);
+<text>"\'"			BEGIN(INITIAL);
 
 \/\/.*				{}			/* matches // ... comments */
 

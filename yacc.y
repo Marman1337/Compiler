@@ -4,9 +4,9 @@
 #include <cstdlib>
 #include <string>
 #include <iomanip>
+#include <sstream>
 #include "yacc.tab.h"
 #include "varTable.h"
-#include "assignmentBuffer.h"
 using namespace std;
 
 /* LEX/YACC FUNCTIONS & VARIABLES */
@@ -24,17 +24,24 @@ void writeForVar(int, char *);
 void writeForConst(int, int);
 void writeForFooter(int);
 void loadReadWriteVar(char*, bool);
+void loadExprVar(char*, int);
 ofstream out;
 string outFileName;
 VarTable varTable;
-AssignBuffer buffer;
-unsigned long r12 = 0;
-unsigned int ifWhileCount = 0;     
-unsigned int loopCount = 0;   /* the variables ifWhileCount and loopCount count the number of if/while statements and for loops in the pascal file,
-			       * and their values are appended to the labels in the assembly file, so that their names are not the same */
+unsigned int assignAddress = 0;
+unsigned int ifWhileCount = 0; 
+unsigned int loopCount = 0;		/* The variables ifWhileCount and loopCount count the number of if/while statements and for loops in the pascal file.
+					 * Their values are appended to the labels in the assembly file, so that their names are not the same.
+					 * The reason why if/while share the same counter, is because they both depend on boolean value
+					 * and the generateCompare() function is used to compare values in two registers and take appropriate branch. */
+bool first = true;			/* This variable indicates, whether we are processing the first two factors in an expression. Different
+					 * code is generated for the first two factors and any subsequent in the same term */
+stringstream assignStream;		/* This is a buffer for code generated to evaluate an expression. It is used in processBuffer() function
+					 * to write its contents to the output file */
 
 %}
 
+/* TOKENS, TYPES OF NONTERMINALS, UNION */
 %token PBEGIN END PROGRAM IF THEN ELSE TO DO VAR INT
 PLUS MINUS MUL DIV LT GT LE GE NE EQ READ WRITE WRITELN
 OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
@@ -44,16 +51,24 @@ OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
 	int ival;
 	char *sval;
 	bool bval;
+
+	struct termT
+	{
+		char* id;
+		bool var;
+	} termType;
 }
 %token <ival> FOR
 %token <ival> WHILE
-%token <ival> NUMBER
-%token <sval> IDENTIFIER
+%token <termType> NUMBER
+%token <termType> IDENTIFIER
 %token <sval> TEXT
 %type  <bval> addop
-%type  <ival> num relop if
-%type  <sval> var
+%type  <bval> mulop
+%type  <ival> relop if
+%type  <termType> num factor term expression var
 
+/* GRAMMAR RULES */
 %%
 
 program			: /* empty program */
@@ -65,10 +80,10 @@ program			: /* empty program */
 
 program_header		: PROGRAM IDENTIFIER SEMICOLON
 			{
-				out << "\tAREA " << $2 << ",CODE,READWRITE" << endl << endl;
+				out << "\tAREA " << $2.id << ",CODE,READWRITE" << endl << endl;
 				writeHeaders();
 				out << endl << "\tENTRY" << endl << endl;
-				delete[] $2;
+				delete[] $2.id;
 			};
 
 var_declarations	: VAR var_list;
@@ -77,13 +92,14 @@ var_list		: var_identifiers COLON var_type SEMICOLON;
 
 var_identifiers		: IDENTIFIER
 			{
-				addVar($1);
-				delete[] $1;
+				addVar($1.id);
+				delete[] $1.id; /* The type of IDENTIFIER is a char* to dynamically allocated memory in lex. Need to delete any
+						 * reference to IDENTIFIER / NUMBER / TEXT tokens in order to avoid memory leak. */
 			}
 			| var_identifiers COMMA IDENTIFIER
 			{
-				addVar($3);
-				delete[] $3;
+				addVar($3.id);
+				delete[] $3.id;
 			};
 
 var_type		: INT;
@@ -103,12 +119,12 @@ statement		: assignment_statement
 
 assignment_statement	: IDENTIFIER ASSIGNOP expression
 			{
-				generateAssignment($1);
-				delete[] $1; //delete the string of identifier because goes out of scope, no need for memory leak there...
+				generateAssignment($1.id);
+				delete[] $1.id;
 			}; 
 
-if_statement		: if_then_statement {r12 = 0;}
-			| if_then_else_statement {r12 = 0;};
+if_statement		: if_then_statement
+			| if_then_else_statement;
 
 if_then_statement	: if boolean_part then_part {out << "else" << $1 << endl;};
 
@@ -116,7 +132,7 @@ if_then_else_statement	: if boolean_part then_part ELSE {out << "\tB then" << $1
 
 if			: IF {$$ = ++ifWhileCount;};
 
-then_part		: THEN then_body {r12 = 0;};
+then_part		: THEN then_body;
 
 then_body		: loop_block
 			| assignment_statement
@@ -141,8 +157,8 @@ boolean_part		: OPAREN boolean_value CPAREN
 
 boolean_value		: IDENTIFIER relop expression
 			{
-				generateCompare($1, $2);
-				delete[] $1;
+				generateCompare($1.id, $2);
+				delete[] $1.id;
 			};
 
 loop_block		: PBEGIN loop_statements END;
@@ -161,24 +177,24 @@ loop_statement		: assignment_statement
 for_loop		: FOR start_value TO var
 			{
 				$1 = ++loopCount;
-				writeForVar($1, $4);
+				writeForVar($1, $4.id);
 
-				delete[] $4;
+				delete[] $4.id;
 			}
 			  DO for_body
 			{
 				writeForFooter($1);
-				r12 = 0;
 			}
 			| FOR start_value TO num
 			{
 				$1 = ++loopCount;
-				writeForConst($1, $4);
+				int temp = atoi($4.id);
+				writeForConst($1, temp);
+				delete[] $4.id;
 			}
 			  DO for_body
 			{
 				writeForFooter($1);
-				r12 = 0;
 			};
 
 start_value		: OPAREN assignment_statement CPAREN
@@ -193,7 +209,7 @@ for_body		: loop_block
 			| writeN
 			| writeln;
 
-while_loop		: WHILE {$1 = ++ifWhileCount; out << "while" << ifWhileCount << endl;} boolean_part while_body {out << "\tB while" << $1 << endl << "else" << $1 << endl;};
+while_loop		: WHILE {$1 = ++ifWhileCount; out << "while" << ifWhileCount << endl;} boolean_part DO while_body {out << "\tB while" << $1 << endl << "else" << $1 << endl;};
 
 while_body		: loop_block
 			| for_loop
@@ -204,43 +220,24 @@ while_body		: loop_block
 			| writeN
 			| writeln;
 
-expression		: expression addop num
-			{
-				buffer.addEntry("", $3, $2, true); //addEntry(string VariableName, int ConstantValue, bool isAddition, bool isConstant)
-			}
-			| expression addop var
-			{
-				buffer.addEntry($3, 0, $2, false);
-				delete[] $3;
-			}
-			| num
-			{
-				buffer.addEntry("", $1, true, true);			
-			}
-			| var
-			{
-				buffer.addEntry($1, 0, true, false);
-				delete[] $1;
-			};
-
 readVar			: READ OPAREN IDENTIFIER CPAREN 
 			{
 				out << "\tBL READR3_" << endl;
 
-				loadReadWriteVar($3, false);
+				loadReadWriteVar($3.id, false);
 
 				out << "\tSTR R3, [R12]" << endl;
-				delete[] $3;
+				delete[] $3.id;
 			};
 
 writeN			: WRITE OPAREN IDENTIFIER CPAREN
 			{
-				loadReadWriteVar($3, true);
+				loadReadWriteVar($3.id, true);
 
 				out << "\tLDR R0, [R12]" << endl;
 				out << "\tMOV R5, #0x1" << endl; //0x0 for writeln, 0x1 for write
 				out << "\tBL PRINTR0_" << endl;
-				delete[] $3;
+				delete[] $3.id;
 			}
 			| WRITE OPAREN TEXT CPAREN
 			{
@@ -256,12 +253,12 @@ writeN			: WRITE OPAREN IDENTIFIER CPAREN
 
 writeln			: WRITELN OPAREN IDENTIFIER CPAREN
 			{
-				loadReadWriteVar($3, true);
+				loadReadWriteVar($3.id, true);
 
 				out << "\tLDR R0, [R12]" << endl;
 				out << "\tMOV R5, #0x0" << endl; //0x0 for writeln, 0x1 for write
 				out << "\tBL PRINTR0_" << endl;
-				delete[] $3;
+				delete[] $3.id;
 			}
 			| WRITELN OPAREN TEXT CPAREN
 			{
@@ -277,12 +274,133 @@ writeln			: WRITELN OPAREN IDENTIFIER CPAREN
 				delete[] $3;
 			};
 
-num			: NUMBER {$$ = $1;};
-			
-var			: IDENTIFIER {$$ = $1;};
+expression		: expression addop term
+			{
+				if($2 == true)
+				{
+					if($3.id != NULL)
+					{
+						if($3.var == true)
+						{
+							loadExprVar($3.id, 1);
+							assignStream << "\tADD R0, R0, R1\n";
+						}
+						else
+						{
+							assignStream << "\tADD R0, R0, #0x" << hex << atoi($3.id) << "\n";
+						}
 
-addop			: PLUS  {$$ = true}
-			| MINUS {$$ = false};
+						delete[] $3.id;
+					}
+					else
+						assignStream << "\tADD R0, R0, R1\n";
+				}
+				else
+				{
+					if($3.id != NULL)
+					{
+						if($3.var == true)
+						{
+							loadExprVar($3.id, 1);
+							assignStream << "\tSUB R0, R0, R1\n";
+						}
+						else
+						{
+							assignStream << "\tSUB R0, R0, #0x" << hex << atoi($3.id) << "\n";
+						}
+						delete[] $3.id;
+					}
+					else
+						assignStream << "\tSUB R0, R0, R1\n";
+				}
+				first = true;
+			}
+			| term
+			{
+				if($1.id != NULL)
+				{
+					if($1.var == true)
+					{
+						loadExprVar($1.id, 1);
+						assignStream << "\tADD R0, R0, R1\n";
+					}
+					else
+					{
+						assignStream << "\tADD R0, R0, #0x" << hex << atoi($1.id) << "\n";
+					}
+			
+					delete[] $1.id;
+				}
+				else
+					assignStream << "\tADD R0, R0, R1\n";
+
+				first = true;
+			};
+
+term			: term mulop factor
+			{
+				if(first == true)
+				{
+					if($1.var == true)
+						loadExprVar($1.id, 2);
+					else
+						assignStream << "\tMOV R2, #0x" << hex << atoi($1.id) << "\n";
+
+					if($3.var == true)
+						loadExprVar($3.id, 3);
+					else
+						assignStream << "\tMOV R3, #0x" << hex << atoi($3.id) << "\n";
+
+					if($2 == true)
+					{
+						assignStream << "\tMUL R1, R2, R3\n";
+					}
+					else
+					{
+						assignStream << "\tBL DIVR2R3\n";
+					}
+					delete[] $1.id;
+					delete[] $3.id;
+				}
+				else
+				{
+					assignStream << "\tMOV R2, R1\n";
+
+					if($3.var == true)
+						loadExprVar($3.id, 3);
+					else
+						assignStream << "\tMOV R3, #0x" << hex << atoi($3.id) << "\n";
+
+
+					if($2 == true)
+					{
+						assignStream << "\tMUL R1, R2, R3\n";
+					}
+					else
+					{
+						assignStream << "\tBL DIVR2R3\n";
+					}
+					delete[] $1.id;
+					delete[] $3.id;
+				}
+
+				first = false;
+				$$.id = NULL;
+			}
+			| factor {$$ = $1;};
+
+factor			: var {$$ = $1;}
+			| num {$$ = $1;};
+
+addop			: PLUS {$$ = true;}
+			| MINUS {$$ = false;};
+
+mulop			: MUL {$$ = true;}
+			| DIV {$$ = false;};
+
+var			: IDENTIFIER {$1.var = true; $$ = $1;};
+
+num			: NUMBER {$1.var = false; $$ = $1;};
 
 relop			: LT {$$ = 5;}
 			| GT {$$ = 4;}
@@ -292,6 +410,8 @@ relop			: LT {$$ = 5;}
 			| NE {$$ = 0;};
 
 %%
+/*	------------------------------- MAIN -------------------------------	 */
+
 int main(int argc, char* argv[])
 {	
 	/* 
@@ -320,6 +440,7 @@ int main(int argc, char* argv[])
 		exit(-1);
 	}
 }
+/* 	------------------------------- MAIN END -------------------------------	*/
 
 void yyerror(char const *s)
 {
@@ -332,6 +453,183 @@ void yyerror(char const *s)
 	out.close();
 	
 	exit(-1);
+}
+
+void addVar(char *c)
+{
+	if(varTable.lookup(c) == NULL)    //check if the variable has not been declared already
+		varTable.addVariable(c);
+	else				  //if the variable has been already declared, terminate
+	{
+		string err("Redeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+}
+
+void generateAssignment(char *c)
+{
+	varEntry *assignVar = varTable.lookup(c); //check if the variable to which assign to was declared
+		
+	if(assignVar == NULL)          //if the variable has not been declared
+	{
+		string err("Undeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}	
+
+	out << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
+
+	processBuffer();
+			
+	out << "\tLDR R12, =0x" << hex << assignVar->location << endl; //load to R12 the address of the variable
+	assignAddress = assignVar->location;			//save the address of the most recently assigned variable, used in for loop
+	out << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
+	
+	assignVar->initialised = true;		//flag that the variable has been initialised
+}
+
+void generateCompare(char *c, int i)
+{
+	out << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
+	
+	processBuffer();
+
+	varEntry *testVar = varTable.lookup(c);
+
+	if(testVar != NULL) //check if the variable which is being compared has been declared
+	{
+		if(testVar->initialised == false) //if the variable on the LHS has not been initialised, display a warning
+			cout << "Warning: Uninitialised variable '" << testVar->id << "', line: " << lineno << endl;
+
+		out << "\tLDR R12, =0x" << hex << testVar->location << endl;
+		out << "\tLDR R2, [R12]" << endl; //load the variable to R2
+	}				
+	else                          //if the variable has not been declared, terminate and display error
+	{
+		string err("Undeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+
+	out << "\tCMP R2, R0" << endl; //compare the variable on the LHS with the expression on the RHS (f.e. 'A >= 2+3')
+
+	switch(i) //generate appropriate branch
+	{
+	case 0: //token NE (not equal), else branch is therefore if two values are EQ (equal)
+		out << "\tBEQ else" << ifWhileCount << endl;
+		break;
+	case 1: //token EQ (equal), else branch is therefore if two values are NE (not equal)
+		out << "\tBNE else" << ifWhileCount << endl;
+		break;
+	case 2: //token GE (greater or equal), else branch is therefore if the first value is LT (less than)
+		out << "\tBLT else" << ifWhileCount << endl;
+		break;
+	case 3: //token LE (less or equal), else branch is therefore if the first value is GT (greater than)
+		out << "\tBGT else" << ifWhileCount << endl;
+		break;
+	case 4: //token GT (greater than), else branch is therefore if the first value is LE (less or equal)
+		out << "\tBLE else" << ifWhileCount << endl;
+		break;
+	case 5: //token LT (less than), else branch is therefore if the first value is GE (greater or equal)
+		out << "\tBGE else" << ifWhileCount << endl;
+		break;
+	}			
+}
+
+void processBuffer()
+{
+		out << assignStream.str();
+		assignStream.str(string()); /* clear the stringstream, strange way but apparently the class 
+					     * has no member function to clear the content of stringstream */
+}
+
+void loadExprVar(char *c, int reg)
+{
+	varEntry *currentVar = varTable.lookup(c);       //get appropriate entry from the variables symbol table
+
+	if(currentVar != NULL) //if the variable which is on the RHS was declared:
+	{
+		if(currentVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
+			cout << "Warning: Uninitialised variable '" << currentVar->id << "', line: " << lineno << endl;
+	
+		assignStream << "\tLDR R12, =0x" << hex << currentVar->location << endl;
+		assignStream << "\tLDR R" << reg << ", [R12]" << endl;
+	}
+	else //if it wasn't declared, terminate and display error
+	{
+		string err("Undeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+}
+
+void loadReadWriteVar(char *c, bool write)
+{
+	varEntry *ioVar = varTable.lookup(c);
+
+	if(ioVar != NULL) //check if the variable which is being compared has been declared
+	{
+		if(write == true && ioVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
+			cout << "Warning: Uninitialised variable '" << ioVar->id << "', line: " << lineno << endl;
+
+		out << "\tLDR R12, =0x" << hex << ioVar->location << endl;
+	}				
+	else                          //if the variable has not been declared, terminate and display error
+	{
+		string err("Undeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+
+	if(write == false)
+		ioVar->initialised = true;
+}
+
+void writeForVar(int loop, char *c)
+{
+	out << "\tSUB R0, R0, #0x1" << endl;
+	out << "\tSTR R0, [R12]" << endl;
+	out << "for" << loop << endl << "\tLDR R12, =0x" << hex << assignAddress << endl;
+	out << "\tLDR R10, [R12]" << endl;
+	out << "\tADD R10, R10, #1" << endl;
+	out << "\tSTR R10, [R12]" << endl;
+				
+	varEntry *finalVar = varTable.lookup(c);
+
+	if(finalVar != NULL) //check if the variable which value is used as final has been declared
+	{
+		out << "\tLDR R12, =0x" << hex << finalVar->location << endl;
+		out << "\tLDR R11, [R12]" << endl; //load the variable to R11
+	}				
+	else                          //if the variable has not been declared, terminate and display error
+	{
+		string err("Undeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+				
+	out << "\tCMP R10, R11" << endl;
+	out << "\tBGT forend" << loop << endl;
+}
+
+void writeForConst(int loop, int final)
+{
+	out << "\tSUB R0, R0, #0x1" << endl;
+	out << "\tSTR R0, [R12]" << endl;
+	out << "for" << loop << endl << "\tLDR R12, =0x" << hex << assignAddress << endl;
+	out << "\tLDR R10, [R12]" << endl;
+	out << "\tADD R10, R10, #1" << endl;
+	out << "\tSTR R10, [R12]" << endl;
+	out << "\tMOV R11, #0x" << hex << final << endl;
+	out << "\tCMP R10, R11" << endl;
+	out << "\tBGT forend" << loop << endl;
+}
+
+void writeForFooter(int n)
+{
+	out << "\tB for" << n << endl;
+	out << "forend" << n << endl;
 }
 
 void writeHeaders()
@@ -450,14 +748,14 @@ void writeHeaders()
 	out << "\tBEQ start		;if the first character was a NEWLINE, just keep reading" << endl;
 	out << "\tCMP R0, #0x2D		;if the first character was a minus" << endl;
 	out << "\tMOVEQ R1, #0x1	;move 1 to R1, used at the end to reverse the value in R3" << endl;
-	out << "\tBEQ loop		;read the other characters" << endl << endl;
+	out << "\tBEQ loopread		;read the other characters" << endl << endl;
 
 	out << "\tSUB R0, R0, #0x30	;if the first character was anything else than NEWLINE or -, need to accumulate it in R3" << endl;
 	out << "\tMOV R2, R3" << endl;
 	out << "\tMUL R3, R2, R10" << endl;	
 	out << "\tADD R3, R3, R0" << endl << endl;
 
-	out << "loop" << endl;
+	out << "loopread" << endl;
 	out << "\tSWI SWI_ReadC		;read char to R0 (value in ASCII)" << endl;
 	out << "\tSWI SWI_WriteC	;write the char that has just been read" << endl;
 	out << "\tCMP R0, #0xA		;this value corresponds to newline character" << endl;
@@ -466,225 +764,21 @@ void writeHeaders()
 	out << "\tMOV R2, R3		;temporarily store the current accumulated value in R2, needed for the MUL instruction to work" << endl;
 	out << "\tMUL R3, R2, R10	;multiply the current accumulated value by 10" << endl;
 	out << "\tADD R3, R3, R0	;add the read digit" << endl;
-	out << "\tB loop		;branch to read next digit" << endl;
+	out << "\tB loopread		;branch to read next digit" << endl;
 	out << "end" << endl;
 	out << "\tCMP R1, #0x1		;if the first chracter was a minus" << endl;
 	out << "\tRSBEQ R3, R3, #0x0	;get the negative value of R3" << endl << endl;
 	
 	out << "\tLDMED r13!,{r0,r1,r2,r15}  ;pop values from the stack and return" << endl << endl;
-}
 
-void addVar(char *c)
-{
-	if(varTable.lookup(c) == NULL)    //check if the variable has not been declared already
-		varTable.addVariable(c);
-	else				  //if the variable has been already declared, terminate
-	{
-		string err("Redeclared variable '");
-		err.append(c); err.append("'");
-		yyerror(err.c_str());
-	}
-}
+	out << "DIVR2R3" << endl;
+	out<< "\tSTMED r13!, {r2,r3,r14}	;push registers on stack" << endl;
+	out<< "\tMOV R1, #0x0" << endl;
+	out<< "loopdiv" << endl;
+	out<< "\tSUB R2, R2, R3			;subtract divisor from dividend" << endl;
+	out<< "\tCMP R2, #0x0			;check if we went negative already" << endl;
+	out<< "\tADDGE R1, R1, #0x1		;if positive, or 0, increment R1 (the output)" << endl;
+	out<< "\tBGT loopdiv			;if positive, perform the subtraction again (no need to branch if 0)" << endl;
 
-void generateAssignment(char *c)
-{
-	varEntry *assignVar = varTable.lookup(c); //check if the variable to which assign to was declared
-		
-	if(assignVar == NULL)          //if the variable has not been declared
-	{
-		string err("Undeclared variable '");
-		err.append(c); err.append("'");
-		yyerror(err.c_str());
-	}	
-
-	out << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
-
-	processBuffer();
-	
-	if(r12 != assignVar->location) //if R12 already has address of the variable, no need to load the same value to it
-	{			
-		out << "\tLDR R12, =0x" << hex << assignVar->location << endl;
-		r12 = assignVar->location;
-	}
-
-	out << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
-	
-	assignVar->initialised = true;		//flag that the variable has been initialised
-}
-
-void generateCompare(char *c, int i)
-{
-	varEntry *testVar = varTable.lookup(c);
-
-	if(testVar != NULL) //check if the variable which is being compared has been declared
-	{
-		if(testVar->initialised == false) //if the variable on the LHS has not been initialised, display a warning
-			cout << "Warning: Uninitialised variable '" << testVar->id << "', line: " << lineno << endl;
-
-		if(r12 != testVar->location) //if it has been declared, check if r12 has its address in it
-		{
-			out << "\tLDR R12, =0x" << hex << testVar->location << endl;
-			r12 = testVar->location;
-		}
-
-		out << "\tLDR R2, [R12]" << endl; //load the variable to R2
-	}				
-	else                          //if the variable has not been declared, terminate and display error
-	{
-		string err("Undeclared variable '");
-		err.append(c); err.append("'");
-		yyerror(err.c_str());
-	}
-
-	out << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
-
-	processBuffer();
-
-	out << "\tCMP R2, R0" << endl; //compare the variable on the LHS with the expression on the RHS (f.e. 'A >= 2+3')
-
-	switch(i) //generate appropriate branch
-	{
-	case 0: //token NE (not equal), else branch is therefore if two values are EQ (equal)
-		out << "\tBEQ else" << ifWhileCount << endl;
-		break;
-	case 1: //token EQ (equal), else branch is therefore if two values are NE (not equal)
-		out << "\tBNE else" << ifWhileCount << endl;
-		break;
-	case 2: //token GE (greater or equal), else branch is therefore if the first value is LT (less than)
-		out << "\tBLT else" << ifWhileCount << endl;
-		break;
-	case 3: //token LE (less or equal), else branch is therefore if the first value is GT (greater than)
-		out << "\tBGT else" << ifWhileCount << endl;
-		break;
-	case 4: //token GT (greater than), else branch is therefore if the first value is LE (less or equal)
-		out << "\tBLE else" << ifWhileCount << endl;
-		break;
-	case 5: //token LT (less than), else branch is therefore if the first value is GE (greater or equal)
-		out << "\tBGE else" << ifWhileCount << endl;
-		break;
-	}			
-}
-
-void processBuffer()
-{
-	for(int i = 0; i < buffer.getIndex(); i++) //generate data processing code
-	{
-		term *temp = buffer.getEntry(i);    //get the part of the assignment to process from the buffer
-
-		if(temp->constant == true)        //if the term is just a constant
-		{
-			if(temp->addition == true)
-				out << "\tADD R0, R0, #0x" << hex << temp->value << endl;
-			else
-				out << "\tSUB R0, R0, #0x" << hex << temp->value << endl;
-		}
-		else                            //if the term is a variable
-		{
-			varEntry *currentVar = varTable.lookup(temp->id);       //get appropriate entry from the variables symbol table
-
-			if(currentVar != NULL) //if the variable which is on the RHS was declared:
-			{
-				if(currentVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
-					cout << "Warning: Uninitialised variable '" << currentVar->id << "', line: " << lineno << endl;
-				
-				if(r12 != currentVar->location) //if R12 already has address of the variable, no need to LDR the same value to it
-				{
-					out << "\tLDR R12, =0x" << hex << currentVar->location << endl;
-					r12 = currentVar->location;
-				}
-
-				out << "\tLDR R1, [R12]" << endl;
-
-				if(temp->addition == true)
-					out << "\tADD R0, R0, R1" << endl;
-				else
-					out << "\tSUB R0, R0, R1" << endl;
-			}
-			else //if it wasn't declared, terminate and display error
-			{
-				string err("Undeclared variable '");
-				err.append(currentVar->id); err.append("'");
-				yyerror(err.c_str());
-			}
-		}
-	}
-	
-	buffer.flush(); //reset the buffer for the next assignment	
-}
-
-void loadReadWriteVar(char *c, bool write)
-{
-	varEntry *ioVar = varTable.lookup(c);
-
-	if(ioVar != NULL) //check if the variable which is being compared has been declared
-	{
-		if(write == true && ioVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
-			cout << "Warning: Uninitialised variable '" << ioVar->id << "', line: " << lineno << endl;
-
-		if(r12 != ioVar->location) //if it has been declared, check if r12 has its address in it
-		{
-			out << "\tLDR R12, =0x" << hex << ioVar->location << endl;
-			r12 = ioVar->location;
-		}
-	}				
-	else                          //if the variable has not been declared, terminate and display error
-	{
-		string err("Undeclared variable '");
-		err.append(c); err.append("'");
-		yyerror(err.c_str());
-	}
-
-	if(write == false)
-		ioVar->initialised = true;
-}
-
-void writeForVar(int loop, char *c)
-{
-	out << "\tSUB R0, R0, #0x1" << endl;
-	out << "\tSTR R0, [R12]" << endl;
-	out << "for" << loop << endl << "\tLDR R12, =0x" << hex << r12 << endl;
-	out << "\tLDR R10, [R12]" << endl;
-	out << "\tADD R10, R10, #1" << endl;
-	out << "\tSTR R10, [R12]" << endl;
-				
-	varEntry *finalVar = varTable.lookup(c);
-
-	if(finalVar != NULL) //check if the variable which value is used as final has been declared
-	{
-		if(r12 != finalVar->location) //if it has been declared, check if r12 has its address in it
-		{
-			out << "\tLDR R12, =0x" << hex << finalVar->location << endl;
-			r12 = finalVar->location;
-		}
-
-		out << "\tLDR R11, [R12]" << endl; //load the variable to R11
-	}				
-	else                          //if the variable has not been declared, terminate and display error
-	{
-		string err("Undeclared variable '");
-		err.append(c); err.append("'");
-		yyerror(err.c_str());
-	}
-				
-	out << "\tCMP R10, R11" << endl;
-	out << "\tBGT forend" << loop << endl;
-}
-
-void writeForConst(int loop, int final)
-{
-	out << "\tSUB R0, R0, #0x1" << endl;
-	out << "\tSTR R0, [R12]" << endl;
-	out << "for" << loop << endl << "\tLDR R12, =0x" << hex << r12 << endl;
-	out << "\tLDR R10, [R12]" << endl;
-	out << "\tADD R10, R10, #1" << endl;
-	out << "\tSTR R10, [R12]" << endl;
-	out << "\tMOV R11, #0x" << hex << final << endl;
-	out << "\tCMP R10, R11" << endl;
-	out << "\tBGT forend" << loop << endl;
-}
-
-void writeForFooter(int n)
-{
-	out << "\tB for" << n << endl;
-	out << "forend" << n << endl;
+	out<< "\tLDMED r13!, {r2,r3,r15}	;pop registers from stack" << endl;
 }
