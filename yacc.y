@@ -128,29 +128,11 @@ if_statement		: if_then_statement
 
 if_then_statement	: if boolean_part then_part {out << "else" << $1 << endl;};
 
-if_then_else_statement	: if boolean_part then_part ELSE {out << "\tB then" << $1 << endl << "else" << $1 << endl;} else_body {out << "then" << $1 << endl;};
+if_then_else_statement	: if boolean_part then_part ELSE {out << "\tB then" << $1 << endl << "else" << $1 << endl;} loop_body {out << "then" << $1 << endl;};
 
 if			: IF {$$ = ++ifWhileCount;};
 
-then_part		: THEN then_body;
-
-then_body		: loop_block
-			| assignment_statement
-			| for_loop
-			| while_loop
-			| if_statement
-			| readVar
-			| writeN
-			| writeln;
-
-else_body		: loop_block
-			| assignment_statement
-			| for_loop
-			| while_loop
-			| if_statement
-			| readVar
-			| writeN
-			| writeln;
+then_part		: THEN loop_body;
 
 boolean_part		: OPAREN boolean_value CPAREN
 			| boolean_value;
@@ -161,19 +143,6 @@ boolean_value		: IDENTIFIER relop expression
 				delete[] $1.id;
 			};
 
-loop_block		: PBEGIN loop_statements END;
-
-loop_statements		: loop_statements loop_statement SEMICOLON
-			| loop_statement SEMICOLON;
-
-loop_statement		: assignment_statement
-			| for_loop
-			| while_loop
-			| if_statement
-			| readVar
-			| writeN
-			| writeln;
-
 for_loop		: FOR start_value TO var
 			{
 				$1 = ++loopCount;
@@ -181,7 +150,7 @@ for_loop		: FOR start_value TO var
 
 				delete[] $4.id;
 			}
-			  DO for_body
+			  DO loop_body
 			{
 				writeForFooter($1);
 			}
@@ -192,7 +161,7 @@ for_loop		: FOR start_value TO var
 				writeForConst($1, temp);
 				delete[] $4.id;
 			}
-			  DO for_body
+			  DO loop_body
 			{
 				writeForFooter($1);
 			};
@@ -200,21 +169,12 @@ for_loop		: FOR start_value TO var
 start_value		: OPAREN assignment_statement CPAREN
 			| assignment_statement;
 
-for_body		: loop_block
+while_loop		: WHILE {$1 = ++ifWhileCount; out << "while" << ifWhileCount << endl;} boolean_part DO loop_body {out << "\tB while" << $1 << endl << "else" << $1 << endl;};
+
+loop_body		: block
+			| assignment_statement
 			| for_loop
 			| while_loop
-			| assignment_statement
-			| if_statement
-			| readVar
-			| writeN
-			| writeln;
-
-while_loop		: WHILE {$1 = ++ifWhileCount; out << "while" << ifWhileCount << endl;} boolean_part DO while_body {out << "\tB while" << $1 << endl << "else" << $1 << endl;};
-
-while_body		: loop_block
-			| for_loop
-			| while_loop
-			| assignment_statement
 			| if_statement
 			| readVar
 			| writeN
