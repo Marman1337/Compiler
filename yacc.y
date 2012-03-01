@@ -729,20 +729,102 @@ void writeHeaders()
 	
 	out << "\tLDMED r13!,{r0,r1,r2,r15}  ;pop values from the stack and return" << endl << endl << endl;
 
+
 	out << "; Subroutine to divide R2 by R3 and put the result in R1" << endl;
 	out << "; -------------------------------------------------------------------------------" << endl;
 	out << "; We keep subtracting R3 from R2 until we reach 0 or negative value" << endl;
 	out << "; With each subtraction that does not yield in 0 or negative value in R2" << endl;
-	out << "; we increment R0 which is the output of the subroutine" << endl << endl;
+	out << "; we increment R0 which is the output of the subroutine." << endl;
+	out << "; The subroutine also handles all combinations of positive/negative" << endl;
+	out << "; division. Ie x/y, x/(-y), (-x)/y and (-x)/(-y) all yield in correct result." << endl;
+	out << "; Comments next to each instruction explain how the subroutine works in detail." << endl << endl;
 
-	out << "DIVR2R3" << endl;
-	out<< "\tSTMED r13!, {r2,r3,r14}	;push registers on stack" << endl;
-	out<< "\tMOV R1, #0x0			;initialise R1 (the output) to 0" << endl;
-	out<< "loopdiv" << endl;
-	out<< "\tSUB R2, R2, R3			;subtract divisor from dividend" << endl;
-	out<< "\tCMP R2, #0x0			;check if we went negative already" << endl;
-	out<< "\tADDGE R1, R1, #0x1		;if positive, or 0, increment R1 (the output)" << endl;
-	out<< "\tBGT loopdiv			;if positive, perform the subtraction again (no need to branch if 0)" << endl;
+	out << "DIVR2R3" << endl << endl;
+	
+	out << "\tSTMED r13!, {r2,r3,r4,r14}	;push registers on stack" << endl << endl;
+	
+	out << "\tMOV R1, #0x0			;initialise R1 (the output) to 0" << endl;
+	out << "\tMOV R4, #0x0			;0 at the end in R4 means positive result, 1 means negative" << endl;
+	out << "\tCMP R2, #0x0			;check if R2 is positive" << endl;
+	out << "\tRSBLT R2, R2, #0x0		;if R2 is negative, get its positive counterpart" << endl;
+	out << "\tMOVLT R4, #0x1		;if R2 was negative, indicate that the result should be negative" << endl;
+	out << "\tCMP R3, #0x0			;check if R3 is positive" << endl;
+	out << "\tBEQ divByZero			;if 0, branch to the label which prints an error message and terminates the program" << endl << endl;
 
-	out<< "\tLDMED r13!, {r2,r3,r15}	;pop registers from stack" << endl << endl;
+	out << "\tRSBLT R3, R3, #0x0		;if R3 is negative, get its positive counterpart" << endl;
+	out << "\tBGT loopdiv			;if R3 was positive, branch to the main loop and perform division" << endl << endl;
+
+	out << "\tCMP R4, #0x0			;if we have not taken branch, it means that R3 was negative, check what is already in R4" << endl;
+	out << "\tMOVEQ R4, #0x1		;if R4 is 0, it means that R2 was positive, then indicate negative result" << endl;
+	out << "\tMOVNE R4, #0x0		;if R4 is 1, it means that R2 was negative, then two minuses mean plus, indicate positive result" << endl;
+	out << "loopdiv				;start the proper division" << endl << endl;
+
+	out << "\tSUB R2, R2, R3		;subtract divisor from dividend" << endl;
+	out << "\tCMP R2, #0x0			;check if we went negative already" << endl;
+	out << "\tADDGE R1, R1, #0x1		;if positive, or 0, increment R1 (the output)" << endl;
+	out << "\tBGT loopdiv			;if positive, perform the subtraction again (no need to branch if 0)" << endl;
+	out << "\tCMP R4, #0x1			;check if there is a need to negate the result" << endl;
+	out << "\tRSBEQ R1, R1, #0x0		;negate the result if needed" << endl;
+	out << "\tB end				;if everything was successful, branch to the end" << endl << endl;
+
+	out << "divByZero" << endl;
+	out << "\tMOV R0, #0x44		;D" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x69		;i" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x76		;v" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x69		;i" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x73		;s" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x69		;i" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x6f		;o" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x6e		;n" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x20		;" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x62		;b" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x79		;y" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x20		;" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x30		;0" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x2e		;." << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x20		;" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x54		;T" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x65		;e" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x72		;r" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x6d		;m" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x69		;i" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x6e		;n" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x61		;a" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x74		;t" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x69		;i" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x6e		;n" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x67		;g" << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tMOV R0, #0x2e		;." << endl;
+	out << "\tSWI SWI_WriteC" << endl;
+	out << "\tSWI SWI_Exit" << endl;
+	
+	out << "end" << endl;
+	out << "\tLDMED r13!, {r2,r3,r4,r15}	;pop registers from stack" << endl << endl;
+
 }
