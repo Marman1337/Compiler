@@ -23,6 +23,8 @@ void writeHeaders();
 void writeForVar(int, char *);
 void writeForConst(int, int);
 void writeForFooter(int);
+void writeText(char *);
+void writeVar(char *);
 void loadReadWriteVar(char*, bool);
 void loadExprVar(char*, int);
 ofstream out;
@@ -183,9 +185,7 @@ loop_body		: block
 readVar			: READ OPAREN IDENTIFIER CPAREN 
 			{
 				out << "\tBL READR3_" << endl;
-
 				loadReadWriteVar($3.id, false);
-
 				out << "\tSTR R3, [R12]" << endl;
 				delete[] $3.id;
 			};
@@ -200,38 +200,22 @@ writeln			: WRITELN OPAREN write_body CPAREN
 
 write_body		: write_body COMMA TEXT
 			{
-				int i = 0;
-				while($3[i] != '\0')
-				{
-					out << "\tMOV R0, #0x" << hex << (int)$3[i] << "\t\t;" << $3[i] << endl;
-					out << "\tSWI SWI_WriteC" << endl;
-					i++;
-				}
+				writeText($3);
 				delete[] $3;
 			}
 			| write_body COMMA IDENTIFIER
 			{
-				loadReadWriteVar($3.id, true);
-				out << "\tLDR R0, [R12]" << endl;
-				out << "\tBL PRINTR0_" << endl;
+				writeVar($3.id);
 				delete[] $3.id;
 			}
 			| TEXT
 			{
-				int i = 0;
-				while($1[i] != '\0')
-				{
-					out << "\tMOV R0, #0x" << hex << (int)$1[i] << "\t\t;" << $1[i] << endl;
-					out << "\tSWI SWI_WriteC" << endl;
-					i++;
-				}
+				writeText($1);
 				delete[] $1;
 			}
 			| IDENTIFIER
 			{
-				loadReadWriteVar($1.id, true);
-				out << "\tLDR R0, [R12]" << endl;
-				out << "\tBL PRINTR0_" << endl;
+				writeVar($1.id);
 				delete[] $1.id;
 			};
 
@@ -247,9 +231,7 @@ expression		: expression addop term
 							assignStream << "\tADD R0, R0, R1\n";
 						}
 						else
-						{
 							assignStream << "\tADD R0, R0, #0x" << hex << atoi($3.id) << "\n";
-						}
 
 						delete[] $3.id;
 					}
@@ -266,9 +248,8 @@ expression		: expression addop term
 							assignStream << "\tSUB R0, R0, R1\n";
 						}
 						else
-						{
 							assignStream << "\tSUB R0, R0, #0x" << hex << atoi($3.id) << "\n";
-						}
+
 						delete[] $3.id;
 					}
 					else
@@ -286,9 +267,7 @@ expression		: expression addop term
 						assignStream << "\tADD R0, R0, R1\n";
 					}
 					else
-					{
 						assignStream << "\tADD R0, R0, #0x" << hex << atoi($1.id) << "\n";
-					}
 			
 					delete[] $1.id;
 				}
@@ -313,13 +292,10 @@ term			: term mulop factor
 						assignStream << "\tMOV R3, #0x" << hex << atoi($3.id) << "\n";
 
 					if($2 == true)
-					{
 						assignStream << "\tMUL R1, R2, R3\n";
-					}
 					else
-					{
 						assignStream << "\tBL DIVR2R3\n";
-					}
+
 					delete[] $1.id;
 					delete[] $3.id;
 				}
@@ -332,15 +308,11 @@ term			: term mulop factor
 					else
 						assignStream << "\tMOV R3, #0x" << hex << atoi($3.id) << "\n";
 
-
 					if($2 == true)
-					{
 						assignStream << "\tMUL R1, R2, R3\n";
-					}
 					else
-					{
 						assignStream << "\tBL DIVR2R3\n";
-					}
+
 					delete[] $1.id;
 					delete[] $3.id;
 				}
@@ -500,7 +472,7 @@ void generateCompare(char *c, int i)
 
 void processBuffer()
 {
-		out << assignStream.str();
+		out << assignStream.str();  //write the contents of the buffer to the output file
 		assignStream.str(string()); /* clear the stringstream, strange way but apparently the class 
 					     * has no member function to clear the content of stringstream */
 }
@@ -591,6 +563,24 @@ void writeForFooter(int n)
 {
 	out << "\tB for" << n << endl;
 	out << "forend" << n << endl;
+}
+
+void writeText(char *t)
+{
+	int i = 0;
+	while(t[i] != '\0')
+	{
+		out << "\tMOV R0, #0x" << hex << (int)t[i] << "\t\t;" << t[i] << endl;
+		out << "\tSWI SWI_WriteC" << endl;
+		i++;
+	}
+}
+
+void writeVar(char* v)
+{
+	loadReadWriteVar(v, true);
+	out << "\tLDR R0, [R12]" << endl;
+	out << "\tBL PRINTR0_" << endl;
 }
 
 void writeHeaders()
@@ -728,7 +718,6 @@ void writeHeaders()
 	out << "\tRSBEQ R3, R3, #0x0	;get the negative value of R3" << endl << endl;
 	
 	out << "\tLDMED r13!,{r0,r1,r2,r15}  ;pop values from the stack and return" << endl << endl << endl;
-
 
 	out << "; Subroutine to divide R2 by R3 and put the result in R1" << endl;
 	out << "; -------------------------------------------------------------------------------" << endl;
