@@ -79,7 +79,7 @@ program			: /* empty program */
 				out << "\tSWI SWI_Exit" << endl;
 				out << "\n\tEND" << endl;
 			};
-
+/* finds program header */
 program_header		: PROGRAM IDENTIFIER SEMICOLON
 			{
 				out << "\tAREA " << $2.id << ",CODE,READWRITE" << endl << endl;
@@ -88,7 +88,8 @@ program_header		: PROGRAM IDENTIFIER SEMICOLON
 				delete[] $2.id;
 			};
 
-var_declarations	: VAR var_list;
+/* finds variable declarations and updates the symbol table (varTable.cpp) with appropriate entries */
+var_declarations	: VAR var_list; 
 
 var_list		: var_identifiers COLON var_type SEMICOLON;
 
@@ -104,13 +105,16 @@ var_identifiers		: IDENTIFIER
 				delete[] $3.id;
 			};
 
+/* the supported variable type is INTEGER */
 var_type		: INT;
 
+/* defines a block, enclosed between BEGIN and END keywords */
 block			: PBEGIN statement_list END;
 
 statement_list		: statement_list statement SEMICOLON
 			| statement SEMICOLON;
 
+/* defines all types of statements */
 statement		: assignment_statement
 			| if_statement
 			| for_loop
@@ -119,23 +123,29 @@ statement		: assignment_statement
 			| writeN
 			| writeln;
 
+/* defines assignment statement */
 assignment_statement	: IDENTIFIER ASSIGNOP expression
 			{
 				generateAssignment($1.id);
 				delete[] $1.id;
 			}; 
 
+/* defines that if statement may be if->then->else or if->then only */
 if_statement		: if_then_statement
 			| if_then_else_statement;
 
+/* defines if->then statement */
 if_then_statement	: if boolean_part then_part {out << "else" << $1 << endl;};
 
+/* defines if->then->else statement */
 if_then_else_statement	: if boolean_part then_part ELSE {out << "\tB then" << $1 << endl << "else" << $1 << endl;} loop_body {out << "then" << $1 << endl;};
 
+/* if we find an IF token, increment the ifWhileCount and save its value as an attribute of the IF token for a given statement */
 if			: IF {$$ = ++ifWhileCount;};
 
 then_part		: THEN loop_body;
 
+/* defines the boolean value determining bahaviour of if and while statements */
 boolean_part		: OPAREN boolean_value CPAREN
 			| boolean_value;
 
@@ -145,6 +155,7 @@ boolean_value		: IDENTIFIER relop expression
 				delete[] $1.id;
 			};
 
+/* defines for loop, increments the for loop counter and saves its value in the FOR keyword for a given loop */
 for_loop		: FOR start_value TO var
 			{
 				$1 = ++loopCount;
@@ -168,11 +179,14 @@ for_loop		: FOR start_value TO var
 				writeForFooter($1);
 			};
 
+/* defines the start value of the for loop */
 start_value		: OPAREN assignment_statement CPAREN
 			| assignment_statement;
 
+/* defines while loop */
 while_loop		: WHILE {$1 = ++ifWhileCount; out << "while" << ifWhileCount << endl;} boolean_part DO loop_body {out << "\tB while" << $1 << endl << "else" << $1 << endl;};
 
+/* defines what can be in the loop body */
 loop_body		: block
 			| assignment_statement
 			| for_loop
@@ -182,6 +196,7 @@ loop_body		: block
 			| writeN
 			| writeln;
 
+/* defines the read(x); function */
 readVar			: READ OPAREN IDENTIFIER CPAREN 
 			{
 				out << "\tBL READR3_" << endl;
@@ -190,8 +205,10 @@ readVar			: READ OPAREN IDENTIFIER CPAREN
 				delete[] $3.id;
 			};
 
+/* defines the write(x); function, the compiler supports write functions such as write('Arbitrary string, var1, 'arbitrary string, var2); */
 writeN			: WRITE OPAREN write_body CPAREN;
 
+/* defines the writeln(x); function*/
 writeln			: WRITELN OPAREN write_body CPAREN
 			{
 				out << "\tMOV R0, #0xA" << endl;
@@ -219,6 +236,7 @@ write_body		: write_body COMMA TEXT
 				delete[] $1.id;
 			};
 
+/* defines an expression */
 expression		: expression addop term
 			{
 				if($2 == true)
@@ -815,5 +833,4 @@ void writeHeaders()
 	
 	out << "end" << endl;
 	out << "\tLDMED r13!, {r2,r3,r4,r15}	;pop registers from stack" << endl << endl;
-
 }
