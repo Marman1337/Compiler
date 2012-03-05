@@ -13,6 +13,8 @@ int lineno = 1;
 (BEGIN|begin)			{return PBEGIN;}
 (END|end)			{return END;}
 (PROGRAM|program)	 	{return PROGRAM;}
+(ARRAY|array)			{return ARRAY;}
+(OF|of)				{return OF;}
 (IF|if)				{return IF;}
 (THEN|then)			{return THEN;}
 (ELSE|else)			{return ELSE;}
@@ -37,11 +39,14 @@ int lineno = 1;
 "="				{return EQ;}
 "("				{return OPAREN;}
 ")"				{return CPAREN;}
+"["				{return OSQPAREN;}
+"]"				{return CSQPAREN;}
 ";"				{return SEMICOLON;}
 ":"				{return COLON;}
 ","				{return COMMA;}
 ":="				{return ASSIGNOP;}
 "."				{return DOT;}
+".."				{return DOTDOT;};
 [\n\r]				{lineno++;}
 [ \t]+ 				{}			 /* ignore whitespacee */
 

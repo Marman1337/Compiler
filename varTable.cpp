@@ -15,15 +15,32 @@ VarTable::~VarTable()
 		delete table[i];
 }
 
-void VarTable::addVariable(string n)
+void VarTable::addVariable(string n, bool arr, int startin, int endin)
 {
-	varEntry *temp = new varEntry;
-	temp->id = n;
-	temp->location = this->varPointer;
-	varPointer += 4;
-	temp->initialised = false;
+	if(arr == false)
+	{
+		varEntry *temp = new varEntry;
+		temp->id = n;
+		temp->location = this->varPointer;
+		varPointer += 4;
+		temp->initialised = false;
+		temp->arr = false;
+		temp->startindex = 0;
 
-	table.push_back(temp);
+		table.push_back(temp);
+	}
+	else
+	{
+		varEntry *temp = new varEntry;
+		temp->id = n;
+		temp->location = this->varPointer;
+		varPointer += 4*(endin-startin+1);
+		temp->initialised = false;
+		temp->arr = true;
+		temp->startindex = startin;
+
+		table.push_back(temp);
+	}
 }
 
 varEntry* VarTable::lookup(string n) //check if the variable has been declared, return pointer to an appropriate entry if so, otherwise NULL

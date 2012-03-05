@@ -16,7 +16,9 @@ extern int lineno;
 
 /* USER-WRITTEN FUNCTIONS & VARIABLES */
 void addVar(char *);
+void addArr(char *, int, int);
 void generateAssignment(char *);
+void generateArrayAssignment(char *);
 void generateCompare(char *, int);
 void processBuffer();
 void writeHeaders();
@@ -40,13 +42,14 @@ bool first = true;			/* This variable indicates, whether we are processing the f
 					 * code is generated for the first two factors and any subsequent in the same term */
 stringstream assignStream;		/* This is a buffer for code generated to evaluate an expression. It is used in processBuffer() function
 					 * to write its contents to the output file */
-
+vector<char *> var_idents;
+stringstream varIndexString;
 %}
 
 /* TOKENS, TYPES OF NONTERMINALS, UNION */
-%token PBEGIN END PROGRAM IF THEN ELSE TO DO VAR INT
+%token PBEGIN END PROGRAM IF THEN ELSE TO DO VAR INT ARRAY OF
 PLUS MINUS MUL DIV LT GT LE GE NE EQ READ WRITE WRITELN
-OPAREN CPAREN SEMICOLON COLON COMMA ASSIGNOP DOT
+OPAREN CPAREN OSQPAREN CSQPAREN SEMICOLON COLON COMMA ASSIGNOP DOT DOTDOT
 
 %union
 {
@@ -89,20 +92,40 @@ program_header		: PROGRAM IDENTIFIER SEMICOLON
 			};
 
 /* finds variable declarations and updates the symbol table (varTable.cpp) with appropriate entries */
-var_declarations	: VAR var_list; 
+var_declarations	: VAR var_list;
 
-var_list		: var_identifiers COLON var_type SEMICOLON;
+var_list		: var_list var_line
+			| var_line;
+
+var_line		: var_identifiers COLON var_type SEMICOLON
+			{
+				for(int i = 0; i < var_idents.size(); i++)
+				{
+					addVar(var_idents[i]);
+					delete[] var_idents[i];
+				}
+				var_idents.clear();
+			}
+			| var_identifiers COLON ARRAY OSQPAREN NUMBER DOTDOT NUMBER CSQPAREN OF var_type SEMICOLON
+			{
+				for(int i = 0; i < var_idents.size(); i++)
+				{
+					addArr(var_idents[i], atoi($5.id), atoi($7.id));
+					delete[] var_idents[i];
+				}
+				var_idents.clear();
+			};
 
 var_identifiers		: IDENTIFIER
 			{
-				addVar($1.id);
-				delete[] $1.id; /* The type of IDENTIFIER is a char* to dynamically allocated memory in lex. Need to delete any
-						 * reference to IDENTIFIER / NUMBER / TEXT tokens in order to avoid memory leak. */
+				var_idents.push_back($1.id);
+				//delete[] $1.id; /* The type of IDENTIFIER is a char* to dynamically allocated memory in lex. Need to delete any
+						// * reference to IDENTIFIER / NUMBER / TEXT tokens in order to avoid memory leak. */
 			}
 			| var_identifiers COMMA IDENTIFIER
 			{
-				addVar($3.id);
-				delete[] $3.id;
+				var_idents.push_back($3.id);
+				//delete[] $3.id;
 			};
 
 /* the supported variable type is INTEGER */
@@ -128,7 +151,18 @@ assignment_statement	: IDENTIFIER ASSIGNOP expression
 			{
 				generateAssignment($1.id);
 				delete[] $1.id;
-			}; 
+			}
+			| IDENTIFIER OSQPAREN expression
+			{
+				varIndexString << assignStream.str();
+				assignStream.str(string());
+			} 
+			CSQPAREN ASSIGNOP expression
+			{
+				generateArrayAssignment($1.id);
+				delete[] $1.id;
+			}
+			; 
 
 /* defines that if statement may be if->then->else or if->then only */
 if_statement		: if_then_statement
@@ -197,13 +231,15 @@ loop_body		: block
 			| writeln;
 
 /* defines the read(x); function */
-readVar			: READ OPAREN IDENTIFIER CPAREN 
+readVar			: READ OPAREN IDENTIFIER CPAREN
 			{
 				out << "\tBL READR3_" << endl;
 				loadReadWriteVar($3.id, false);
 				out << "\tSTR R3, [R12]" << endl;
 				delete[] $3.id;
-			};
+			}
+			| READ OPAREN IDENTIFIER OSQPAREN expression CSQPAREN CPAREN
+			{ cout << "found read to array " << $3.id << endl; delete[] $3.id;};
 
 /* defines the write(x); function, the compiler supports write functions such as write('Arbitrary string, var1, 'arbitrary string, var2); */
 writeN			: WRITE OPAREN write_body CPAREN;
@@ -225,6 +261,39 @@ write_body		: write_body COMMA TEXT
 				writeVar($3.id);
 				delete[] $3.id;
 			}
+			| write_body COMMA IDENTIFIER OSQPAREN expression CSQPAREN
+			{
+				varEntry *ioVar = varTable.lookup($3.id); //check if the variable to which assign to was declared
+		
+				if(ioVar == NULL)          //if the variable has not been declared
+				{
+					string err("Undeclared array '");
+					err.append($3.id); err.append("'");
+					yyerror(err.c_str());
+				}
+				else
+				{
+					if(ioVar->arr == false)
+					{
+						string err("Not an array '");
+						err.append($3.id); err.append("'");
+						yyerror(err.c_str());
+					}
+					else
+					{
+						out << "\tMOV R0, #0x0" << endl;
+						processBuffer();
+						out << "\tLDR R12, =0x" << hex << ioVar->location << endl; //load to R12 the address of the variable
+						out << "\tSUB R0, R0, #0x" << hex << ioVar->startindex << endl; //subtract the startindex from the calculated expression in square brackets
+						out << "\tMOV R8, #0x4" << endl; 
+						out << "\tMOV R7, R0" << endl;
+						out << "\tMUL R1, R7, R8" << endl; //multiply the offset by 4
+						out << "\tLDR R0, [R12, R1]" << endl;	 //after calculating offset, load the part of array to registers
+						out << "\tBL PRINTR0_" << endl;	
+					}
+				}
+				delete[] $3.id;
+			}
 			| TEXT
 			{
 				writeText($1);
@@ -233,6 +302,39 @@ write_body		: write_body COMMA TEXT
 			| IDENTIFIER
 			{
 				writeVar($1.id);
+				delete[] $1.id;
+			}
+			| IDENTIFIER OSQPAREN expression CSQPAREN
+			{
+				varEntry *ioVar = varTable.lookup($1.id); //check if the variable to which assign to was declared
+		
+				if(ioVar == NULL)          //if the variable has not been declared
+				{
+					string err("Undeclared array '");
+					err.append($1.id); err.append("'");
+					yyerror(err.c_str());
+				}
+				else
+				{
+					if(ioVar->arr == false)
+					{
+						string err("Not an array '");
+						err.append($1.id); err.append("'");
+						yyerror(err.c_str());
+					}
+					else
+					{
+						out << "\tMOV R0, #0x0" << endl;
+						processBuffer();
+						out << "\tLDR R12, =0x" << hex << ioVar->location << endl; //load to R12 the address of the variable
+						out << "\tSUB R0, R0, #0x" << hex << ioVar->startindex << endl; //subtract the startindex from the calculated expression in square brackets
+						out << "\tMOV R8, #0x4" << endl; 
+						out << "\tMOV R7, R0" << endl;
+						out << "\tMUL R1, R7, R8" << endl; //multiply the offset by 4
+						out << "\tLDR R0, [R12, R1]" << endl;	 //after calculating offset, load the part of array to registers
+						out << "\tBL PRINTR0_" << endl;	
+					}
+				}
 				delete[] $1.id;
 			};
 
@@ -409,7 +511,26 @@ void yyerror(char const *s)
 void addVar(char *c)
 {
 	if(varTable.lookup(c) == NULL)    //check if the variable has not been declared already
-		varTable.addVariable(c);
+		varTable.addVariable(c, false, 0, 0);
+	else				  //if the variable has been already declared, terminate
+	{
+		string err("Redeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+}
+
+void addArr(char *c, int st, int en)
+{
+	if(en - st < 0)
+	{
+		string err("Array '");
+		err.append(c); err.append("' with negative dimensions.");
+		yyerror(err.c_str());
+	}
+	
+	if(varTable.lookup(c) == NULL)    //check if the variable has not been declared already
+		varTable.addVariable(c, true, st, en);
 	else				  //if the variable has been already declared, terminate
 	{
 		string err("Redeclared variable '");
@@ -438,6 +559,42 @@ void generateAssignment(char *c)
 	out << "\tSTR R0, [R12]" << endl;	 //after data processing, store the variable in memory			
 	
 	assignVar->initialised = true;		//flag that the variable has been initialised
+}
+
+void generateArrayAssignment(char *c)
+{
+	varEntry *assignVar = varTable.lookup(c); //check if the variable to which assign to was declared
+		
+	if(assignVar == NULL)          //if the variable has not been declared
+	{
+		string err("Undeclared array '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+	else
+	{
+		if(assignVar->arr == false)
+		{
+			string err("Not an array '");
+			err.append(c); err.append("'");
+			yyerror(err.c_str());
+		}
+		else
+		{
+			out << "\tMOV R0, #0x0" << endl;
+			processBuffer();
+			out << "\tMOV R9, R0" << endl; //assignment result in R9
+			out << "\tMOV R0, #0x0" << endl;
+			out << varIndexString.str();
+			varIndexString.str(string());
+			out << "\tLDR R12, =0x" << hex << assignVar->location << endl; //load to R12 the address of the variable
+			out << "\tSUB R0, R0, #0x" << hex << assignVar->startindex << endl; //subtract the startindex from the calculated expression in square brackets
+			out << "\tMOV R8, #0x4" << endl; 
+			out << "\tMOV R7, R0" << endl;
+			out << "\tMUL R0, R7, R8" << endl; //multiply the offset by 4
+			out << "\tSTR R9, [R12, R0]" << endl;	 //after data processing, store the variable in memory		
+		}
+	}
 }
 
 void generateCompare(char *c, int i)
@@ -490,8 +647,8 @@ void generateCompare(char *c, int i)
 
 void processBuffer()
 {
-		out << assignStream.str();  //write the contents of the buffer to the output file
-		assignStream.str(string()); /* clear the stringstream, strange way but apparently the class 
+	out << assignStream.str();  //write the contents of the buffer to the output file
+	assignStream.str(string()); /* clear the stringstream, strange way but apparently the class 
 					     * has no member function to clear the content of stringstream */
 }
 
@@ -772,7 +929,7 @@ void writeHeaders()
 	out << "\tBGT loopdiv			;if positive, perform the subtraction again (no need to branch if 0)" << endl;
 	out << "\tCMP R4, #0x1			;check if there is a need to negate the result" << endl;
 	out << "\tRSBEQ R1, R1, #0x0		;negate the result if needed" << endl;
-	out << "\tB end				;if everything was successful, branch to the end" << endl << endl;
+	out << "\tB enddiv			;if everything was successful, branch to the end" << endl << endl;
 
 	out << "divByZero" << endl;
 	out << "\tMOV R0, #0x44		;D" << endl;
@@ -831,6 +988,6 @@ void writeHeaders()
 	out << "\tSWI SWI_WriteC" << endl;
 	out << "\tSWI SWI_Exit" << endl;
 	
-	out << "end" << endl;
+	out << "enddiv" << endl;
 	out << "\tLDMED r13!, {r2,r3,r4,r15}	;pop registers from stack" << endl << endl;
 }
