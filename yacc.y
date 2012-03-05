@@ -27,6 +27,8 @@ void writeForConst(int, int);
 void writeForFooter(int);
 void writeText(char *);
 void writeVar(char *);
+void writeArr(char *);
+void readArr(char *);
 void loadReadWriteVar(char*, bool);
 void loadExprVar(char*, int);
 ofstream out;
@@ -239,7 +241,10 @@ readVar			: READ OPAREN IDENTIFIER CPAREN
 				delete[] $3.id;
 			}
 			| READ OPAREN IDENTIFIER OSQPAREN expression CSQPAREN CPAREN
-			{ cout << "found read to array " << $3.id << endl; delete[] $3.id;};
+			{
+				readArr($3.id);
+				delete[] $3.id;
+			};
 
 /* defines the write(x); function, the compiler supports write functions such as write('Arbitrary string, var1, 'arbitrary string, var2); */
 writeN			: WRITE OPAREN write_body CPAREN;
@@ -263,35 +268,7 @@ write_body		: write_body COMMA TEXT
 			}
 			| write_body COMMA IDENTIFIER OSQPAREN expression CSQPAREN
 			{
-				varEntry *ioVar = varTable.lookup($3.id); //check if the variable to which assign to was declared
-		
-				if(ioVar == NULL)          //if the variable has not been declared
-				{
-					string err("Undeclared array '");
-					err.append($3.id); err.append("'");
-					yyerror(err.c_str());
-				}
-				else
-				{
-					if(ioVar->arr == false)
-					{
-						string err("Not an array '");
-						err.append($3.id); err.append("'");
-						yyerror(err.c_str());
-					}
-					else
-					{
-						out << "\tMOV R0, #0x0" << endl;
-						processBuffer();
-						out << "\tLDR R12, =0x" << hex << ioVar->location << endl; //load to R12 the address of the variable
-						out << "\tSUB R0, R0, #0x" << hex << ioVar->startindex << endl; //subtract the startindex from the calculated expression in square brackets
-						out << "\tMOV R8, #0x4" << endl; 
-						out << "\tMOV R7, R0" << endl;
-						out << "\tMUL R1, R7, R8" << endl; //multiply the offset by 4
-						out << "\tLDR R0, [R12, R1]" << endl;	 //after calculating offset, load the part of array to registers
-						out << "\tBL PRINTR0_" << endl;	
-					}
-				}
+				writeArr($3.id);
 				delete[] $3.id;
 			}
 			| TEXT
@@ -306,35 +283,7 @@ write_body		: write_body COMMA TEXT
 			}
 			| IDENTIFIER OSQPAREN expression CSQPAREN
 			{
-				varEntry *ioVar = varTable.lookup($1.id); //check if the variable to which assign to was declared
-		
-				if(ioVar == NULL)          //if the variable has not been declared
-				{
-					string err("Undeclared array '");
-					err.append($1.id); err.append("'");
-					yyerror(err.c_str());
-				}
-				else
-				{
-					if(ioVar->arr == false)
-					{
-						string err("Not an array '");
-						err.append($1.id); err.append("'");
-						yyerror(err.c_str());
-					}
-					else
-					{
-						out << "\tMOV R0, #0x0" << endl;
-						processBuffer();
-						out << "\tLDR R12, =0x" << hex << ioVar->location << endl; //load to R12 the address of the variable
-						out << "\tSUB R0, R0, #0x" << hex << ioVar->startindex << endl; //subtract the startindex from the calculated expression in square brackets
-						out << "\tMOV R8, #0x4" << endl; 
-						out << "\tMOV R7, R0" << endl;
-						out << "\tMUL R1, R7, R8" << endl; //multiply the offset by 4
-						out << "\tLDR R0, [R12, R1]" << endl;	 //after calculating offset, load the part of array to registers
-						out << "\tBL PRINTR0_" << endl;	
-					}
-				}
+				writeArr($1.id);
 				delete[] $1.id;
 			};
 
@@ -751,11 +700,78 @@ void writeText(char *t)
 	}
 }
 
-void writeVar(char* v)
+void writeVar(char *v)
 {
 	loadReadWriteVar(v, true);
 	out << "\tLDR R0, [R12]" << endl;
 	out << "\tBL PRINTR0_" << endl;
+}
+
+void writeArr(char *a)
+{
+	varEntry *ioVar = varTable.lookup(a); //check if the variable to which assign to was declared
+		
+	if(ioVar == NULL)          //if the variable has not been declared
+	{
+		string err("Undeclared array '");
+		err.append(a); err.append("'");
+		yyerror(err.c_str());
+	}
+	else
+	{
+		if(ioVar->arr == false)
+		{
+			string err("Not an array '");
+			err.append(a); err.append("'");
+			yyerror(err.c_str());
+		}
+		else
+		{
+			out << "\tMOV R0, #0x0" << endl;
+			processBuffer();
+			out << "\tLDR R12, =0x" << hex << ioVar->location << endl; //load to R12 the address of the variable
+			out << "\tSUB R0, R0, #0x" << hex << ioVar->startindex << endl; //subtract the startindex from the calculated expression in square brackets
+			out << "\tMOV R8, #0x4" << endl; 
+			out << "\tMOV R7, R0" << endl;
+			out << "\tMUL R1, R7, R8" << endl; //multiply the offset by 4
+			out << "\tLDR R0, [R12, R1]" << endl;	 //after calculating offset, load the part of array to registers
+			out << "\tBL PRINTR0_" << endl;	
+		}
+	}
+}
+
+void readArr(char *a)
+{
+	varEntry *ioVar = varTable.lookup(a); //check if the variable to which assign to was declared
+		
+	if(ioVar == NULL)          //if the variable has not been declared
+	{
+		string err("Undeclared array '");
+		err.append(a); err.append("'");
+		yyerror(err.c_str());
+	}
+	else
+	{
+		if(ioVar->arr == false)
+		{
+			string err("Not an array '");
+			err.append(a); err.append("'");
+			yyerror(err.c_str());
+		}
+		else
+		{
+			out << "\tMOV R0, #0x0" << endl;
+			processBuffer();
+			out << "\tLDR R12, =0x" << hex << ioVar->location << endl; //load to R12 the address of the variable
+			out << "\tSUB R0, R0, #0x" << hex << ioVar->startindex << endl; //subtract the startindex from the calculated expression in square brackets
+			out << "\tMOV R8, #0x4" << endl; 
+			out << "\tMOV R7, R0" << endl;
+			out << "\tMUL R1, R7, R8" << endl; //multiply the offset by 4
+			out << "\tBL READR3_" << endl;
+			//R12 = base address, R1 - offset, R3 - the value that has just been read from stdin
+			out << "\tSTR R3, [R12, R1]" << endl;
+		}
+	}
 }
 
 void writeHeaders()
