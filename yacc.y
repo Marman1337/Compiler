@@ -7,6 +7,7 @@
 #include <sstream>
 #include "yacc.tab.h"
 #include "varTable.h"
+#include "procTable.h"
 using namespace std;
 
 /* LEX/YACC FUNCTIONS & VARIABLES */
@@ -21,6 +22,8 @@ void generateAssignment(char *);
 void generateArrayAssignment(char *);
 void generateCompare(char *, int);
 void processBuffer();
+void procedureDeclaration(char *);
+void procedureCall(char *);
 void writeHeaders();
 void writeForVar(int, char *);
 void writeForConst(int, int);
@@ -34,6 +37,7 @@ void loadExprVar(char*, int);
 ofstream out;
 string outFileName;
 VarTable varTable;
+ProcTable procTable;
 unsigned int assignAddress = 0;
 unsigned int ifWhileCount = 0; 
 unsigned int loopCount = 0;		/* The variables ifWhileCount and loopCount count the number of if/while statements and for loops in the pascal file.
@@ -50,7 +54,7 @@ stringstream varIndexString;
 
 /* TOKENS, TYPES OF NONTERMINALS, UNION */
 %token PBEGIN END PROGRAM IF THEN ELSE TO DO VAR INT ARRAY OF
-PLUS MINUS MUL DIV LT GT LE GE NE EQ READ WRITE WRITELN
+PLUS MINUS MUL DIV LT GT LE GE NE EQ READ WRITE WRITELN PROCEDURE FUNCTION
 OPAREN CPAREN OSQPAREN CSQPAREN SEMICOLON COLON COMMA ASSIGNOP DOT DOTDOT
 
 %union
@@ -79,7 +83,10 @@ OPAREN CPAREN OSQPAREN CSQPAREN SEMICOLON COLON COMMA ASSIGNOP DOT DOTDOT
 %%
 
 program			: /* empty program */
-			| program_header var_declarations block DOT
+			| program_header var_declarations proc_func_declarations
+			{
+				out << endl << "\tENTRY" << endl << endl;
+			} block DOT
 			{
 				out << "\tSWI SWI_Exit" << endl;
 				out << "\n\tEND" << endl;
@@ -89,12 +96,12 @@ program_header		: PROGRAM IDENTIFIER SEMICOLON
 			{
 				out << "\tAREA " << $2.id << ",CODE,READWRITE" << endl << endl;
 				writeHeaders();
-				out << endl << "\tENTRY" << endl << endl;
 				delete[] $2.id;
 			};
 
 /* finds variable declarations and updates the symbol table (varTable.cpp) with appropriate entries */
-var_declarations	: VAR var_list;
+var_declarations	: 
+			| VAR var_list;
 
 var_list		: var_list var_line
 			| var_line;
@@ -121,17 +128,31 @@ var_line		: var_identifiers COLON var_type SEMICOLON
 var_identifiers		: IDENTIFIER
 			{
 				var_idents.push_back($1.id);
-				//delete[] $1.id; /* The type of IDENTIFIER is a char* to dynamically allocated memory in lex. Need to delete any
-						// * reference to IDENTIFIER / NUMBER / TEXT tokens in order to avoid memory leak. */
 			}
 			| var_identifiers COMMA IDENTIFIER
 			{
 				var_idents.push_back($3.id);
-				//delete[] $3.id;
 			};
 
 /* the supported variable type is INTEGER */
 var_type		: INT;
+
+proc_func_declarations	: proc_func_declarations proc_declaration
+			| proc_declaration;
+
+proc_declaration	: PROCEDURE IDENTIFIER arguments SEMICOLON
+			{
+				procedureDeclaration($2.id);
+				var_idents.clear();
+				delete[] $2.id;
+			}
+			var_declarations block SEMICOLON
+			{
+				out << endl << "\tLDMED r13!, {r0-r12, r15}" << endl << endl;
+			};
+
+arguments		: /* no arguments */
+			| OPAREN var_identifiers COLON var_type CPAREN;
 
 /* defines a block, enclosed between BEGIN and END keywords */
 block			: PBEGIN statement_list END;
@@ -146,7 +167,8 @@ statement		: assignment_statement
 			| while_loop
 			| readVar
 			| writeN
-			| writeln;
+			| writeln
+			| procedure_call;
 
 /* defines assignment statement */
 assignment_statement	: IDENTIFIER ASSIGNOP expression
@@ -230,7 +252,8 @@ loop_body		: block
 			| if_statement
 			| readVar
 			| writeN
-			| writeln;
+			| writeln
+			| procedure_call;
 
 /* defines the read(x); function */
 readVar			: READ OPAREN IDENTIFIER CPAREN
@@ -285,6 +308,33 @@ write_body		: write_body COMMA TEXT
 			{
 				writeArr($1.id);
 				delete[] $1.id;
+			};
+
+procedure_call		: IDENTIFIER OPAREN passed_arguments CPAREN
+			{
+				procedureCall($1.id);
+				delete[] $1.id;
+			};
+
+passed_arguments	:
+			| arg_identifiers;
+
+
+arg_identifiers		: IDENTIFIER
+			{
+				var_idents.push_back($1.id);
+			}
+			| NUMBER
+			{
+				var_idents.push_back($1.id);
+			}
+			| arg_identifiers COMMA IDENTIFIER
+			{
+				var_idents.push_back($3.id);
+			}
+			| arg_identifiers COMMA NUMBER
+			{
+				var_idents.push_back($3.id);
 			};
 
 /* defines an expression */
@@ -421,7 +471,20 @@ int main(int argc, char* argv[])
 	 *  ./ARM_mgb10 OUTPUT_FILE_NAME < PASCAL_FILE_PATH
 	 *  therefore any number of command line parameters different than 2 is invalid
 	 */
-	if(argc == 2)
+	if(argc == 1)
+	{
+		cout << "**********************************************************************" << endl;
+		cout << "* 			   Pascal -> ARM                             *" << endl;
+		cout << "*								     *" << endl;
+		cout << "* To run the program, type:					     *" << endl;
+		cout << "* ./ARM_mgb10 PATH_TO_OUTPUT_FILE < PATH_TO_INPUT_FILE		     *" << endl;
+		cout << "*								     *" << endl;
+		cout << "* The generated code will appear in the specified file.		     *" << endl;
+		cout << "* Any errors will appear in the stdout.				     *" << endl;
+		cout << "*								     *" << endl;
+		cout << "**********************************************************************" << endl;
+	}
+	else if(argc == 2)
 	{
 		outFileName = argv[1];
 		out.open(outFileName.c_str());
@@ -601,6 +664,96 @@ void processBuffer()
 					     * has no member function to clear the content of stringstream */
 }
 
+void procedureDeclaration(char *p)
+{
+	if(procTable.lookup(p) == NULL)    //check if the procedure has not been declared already
+		procTable.addProcedure(p);
+	else				  //if the procedure has been already declared, terminate
+	{
+		string err("Redeclared procedure '");
+		err.append(p); err.append("'");
+		yyerror(err.c_str());
+	}
+
+	procEntry *temp = procTable.lookup(p);
+
+	for(int i = 0; i < var_idents.size(); i++)
+	{
+		addVar(var_idents[i]);
+		varEntry *varTemp = varTable.lookup(var_idents[i]);
+		procTable.addArgToProc(temp, varTemp);
+		delete[] var_idents[i];
+	}
+				
+	out << p << endl;
+	out << "\tSTMED r13!, {r0-r12, r14}" << endl << endl;
+}
+
+void procedureCall(char *p)
+{
+	procEntry *procCall = procTable.lookup(p);
+
+	if(procCall == NULL) //if the procedure with such name does not exist
+	{
+		string err("Undeclared procedure '");
+		err.append(p); err.append("'");
+		yyerror(err.c_str());
+	}
+	else
+	{
+		if(procCall->arg_no != var_idents.size()) //if the number of arguments passed to the procedure is invalid
+		{
+			char size[5];
+			sprintf(size, "%d", (int)var_idents.size());
+			string err("Bad procedure call. Procedure '");
+			err.append(p); err.append("' does not take "); err.append(size); err.append(" arguments");
+			yyerror(err.c_str());
+		}
+		else
+		{
+			for(int i = 0; i < var_idents.size(); i++) //for each arguments which needs to be passed to the procedure
+			{
+				varEntry *procVar = procTable.getVar(procCall, i); //get the local variable in the procedure
+				if(var_idents[i][0] < 0x30 || var_idents[i][0] > 0x39) /* if the first char is NOT a digit (any ascii char in range between 0x30 and 0x39)
+											* we know that the whole thing is for sure not a variable */
+				{
+					varEntry *argVar = varTable.lookup(var_idents[i]); //load the variable which has to be passed to the procedure
+
+					if(argVar != NULL) //check if the variable has been declared
+					{
+						if(argVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
+							cout << "Warning: Uninitialised variable '" << argVar->id << "', line: " << lineno << endl;
+
+						out << "\tLDR R12, =0x" << hex << argVar->location << endl;
+					}				
+					else                          //if the variable has not been declared, terminate and display error
+					{
+						string err("Undeclared variable '");
+						err.append(var_idents[i]); err.append("'");
+						yyerror(err.c_str());
+					}
+
+					out << "\tLDR R0, [R12]" << endl;
+					out << "\tLDR R12, =0x" << hex << procVar->location << endl;
+					out << "\tSTR R0, [R12]" << endl;
+				}
+				else
+				{
+					int literal = atoi(var_idents[i]);
+					out << "\tMOV R0, #0x" << hex << literal << endl;
+					out << "\tLDR R12, =0x" << hex << procVar->location << endl;
+					out << "\tSTR R0, [R12]" << endl;
+				}
+
+					delete[] var_idents[i];
+			}
+			out << "\tBL " << p << endl;
+		}
+	}
+
+	var_idents.clear();
+}
+
 void loadExprVar(char *c, int reg)
 {
 	varEntry *currentVar = varTable.lookup(c);       //get appropriate entry from the variables symbol table
@@ -625,7 +778,7 @@ void loadReadWriteVar(char *c, bool write)
 {
 	varEntry *ioVar = varTable.lookup(c);
 
-	if(ioVar != NULL) //check if the variable which is being compared has been declared
+	if(ioVar != NULL)
 	{
 		if(write == true && ioVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
 			cout << "Warning: Uninitialised variable '" << ioVar->id << "', line: " << lineno << endl;

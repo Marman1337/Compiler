@@ -23,6 +23,8 @@ int lineno = 1;
 (DO|do)				{return DO;}
 (WHILE|while)			{return WHILE;}
 (VAR|var)			{return VAR;}
+(PROCEDURE|procedure)		{return PROCEDURE;}
+(FUNCTION|function)		{return FUNCTION;}
 (INTEGER|integer)		{return INT;}
 (write)				{return WRITE;}
 (writeln)			{return WRITELN;}
