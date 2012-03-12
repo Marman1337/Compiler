@@ -1,8 +1,7 @@
 program sample6;
 
 var
-	a,b,c,d,e,f,g,h  :  integer;
-	fiboarr : array [1..10] of integer;
+	a,b :  integer;
 
 function fibo(no: integer) : integer;
 var fn1, fn2, temp, i : integer;
@@ -23,12 +22,23 @@ begin
 	end;
 end;
 
-begin
-	for a := 1 to 10 do
-	begin
-		fiboarr[a] := fibo(a);
-	end;
 
-	for a := 1 to 10 do
-		writeln('fiboarr[', a, '] = ', fiboarr[a]);
+
+
+
+
+
+
+
+
+
+begin
+	a := 1;
+	while a > 0 do
+	begin	
+		writeln('Which fibo number do you want?');
+		read(a);
+		b := fibo(a);
+		writeln('The ', a, 'th fibo number is: ', b);
+	end;
 end.
