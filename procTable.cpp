@@ -18,6 +18,17 @@ void ProcTable::addProcedure(string id)
 	procEntry *temp = new procEntry;
 	temp->name = id;
 	temp->arg_no = 0;
+	temp->function = false;
+
+	table.push_back(temp);
+}
+
+void ProcTable::addFunction(string id)
+{
+	procEntry *temp = new procEntry;
+	temp->name = id;
+	temp->arg_no = 0;
+	temp->function = true;
 
 	table.push_back(temp);
 }
@@ -31,7 +42,7 @@ procEntry* ProcTable::lookup(string id) //check if the procedure has been declar
 	return NULL;
 }
 
-bool ProcTable::addArgToProc(procEntry* procedure, varEntry* variable)
+bool ProcTable::addArgs(procEntry* procedure, varEntry* variable)
 {
 	procedure->arguments.push_back(variable);
 	procedure->arg_no++;

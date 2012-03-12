@@ -20,10 +20,14 @@ void addVar(char *);
 void addArr(char *, int, int);
 void generateAssignment(char *);
 void generateArrayAssignment(char *);
+void generateFunctionAssignment(char *);
+void generateArrayFunctionAssignment(char *);
 void generateCompare(char *, int);
 void processBuffer();
 void procedureDeclaration(char *);
+void functionDeclaration(char *);
 void procedureCall(char *);
+void functionCall(char *);
 void writeHeaders();
 void writeForVar(int, char *);
 void writeForConst(int, int);
@@ -77,8 +81,9 @@ OPAREN CPAREN OSQPAREN CSQPAREN SEMICOLON COLON COMMA ASSIGNOP DOT DOTDOT
 %type  <bval> addop
 %type  <bval> mulop
 %type  <ival> relop if
-%type  <termType> num factor term expression var
+%type  <termType> num factor term expression var array_assignment
 
+%expect 1    //suppress one shift/reduce conflict from being reported, this is an unharmful dangling else issue
 /* GRAMMAR RULES */
 %%
 
@@ -137,18 +142,38 @@ var_identifiers		: IDENTIFIER
 /* the supported variable type is INTEGER */
 var_type		: INT;
 
+/* declarations of functions and procedures */
 proc_func_declarations	: proc_func_declarations proc_declaration
-			| proc_declaration;
+			| proc_func_declarations func_declaration
+			| proc_declaration
+			| func_declaration;
 
 proc_declaration	: PROCEDURE IDENTIFIER arguments SEMICOLON
 			{
 				procedureDeclaration($2.id);
+				out << $2.id << endl;
+				out << "\tSTMED r13!, {r0-r12, r14}" << endl << endl;
+
 				var_idents.clear();
 				delete[] $2.id;
 			}
 			var_declarations block SEMICOLON
 			{
-				out << endl << "\tLDMED r13!, {r0-r12, r15}" << endl << endl;
+				out << endl << "\tLDMED r13!, {r0-r12, r15}" << endl;
+			};
+
+func_declaration	: FUNCTION IDENTIFIER arguments COLON var_type SEMICOLON
+			{
+				functionDeclaration($2.id);
+				out << $2.id << endl;
+				out << "\tSTMED r13!, {r0-r12, r14}" << endl << endl;
+
+				var_idents.clear();
+				delete[] $2.id;
+			}
+			var_declarations block SEMICOLON
+			{
+				out << endl << "\tLDMED r13!, {r0-r12, r15}" << endl;
 			};
 
 arguments		: /* no arguments */
@@ -171,22 +196,33 @@ statement		: assignment_statement
 			| procedure_call;
 
 /* defines assignment statement */
-assignment_statement	: IDENTIFIER ASSIGNOP expression
+assignment_statement	: IDENTIFIER ASSIGNOP expression //expression assignment to variable
 			{
 				generateAssignment($1.id);
 				delete[] $1.id;
 			}
-			| IDENTIFIER OSQPAREN expression
-			{
-				varIndexString << assignStream.str();
-				assignStream.str(string());
-			} 
-			CSQPAREN ASSIGNOP expression
+			| array_assignment ASSIGNOP expression
 			{
 				generateArrayAssignment($1.id);
 				delete[] $1.id;
 			}
-			; 
+			| IDENTIFIER ASSIGNOP function_call
+			{
+				generateFunctionAssignment($1.id);
+				delete[] $1.id;
+			}
+			| array_assignment ASSIGNOP function_call
+			{
+				generateArrayFunctionAssignment($1.id);
+				delete[] $1.id;
+			};
+
+array_assignment	: IDENTIFIER OSQPAREN expression CSQPAREN
+			{
+				varIndexString << assignStream.str();
+				assignStream.str(string());
+				$$.id = $1.id;
+			};
 
 /* defines that if statement may be if->then->else or if->then only */
 if_statement		: if_then_statement
@@ -310,15 +346,21 @@ write_body		: write_body COMMA TEXT
 				delete[] $1.id;
 			};
 
+/* defines procedure and function calls */
 procedure_call		: IDENTIFIER OPAREN passed_arguments CPAREN
 			{
 				procedureCall($1.id);
 				delete[] $1.id;
 			};
 
-passed_arguments	:
-			| arg_identifiers;
+function_call		: IDENTIFIER OPAREN passed_arguments CPAREN
+			{
+				functionCall($1.id);
+				delete[] $1.id;
+			};
 
+passed_arguments	: /* no passed arguments */
+			| arg_identifiers;
 
 arg_identifiers		: IDENTIFIER
 			{
@@ -573,6 +615,24 @@ void generateAssignment(char *c)
 	assignVar->initialised = true;		//flag that the variable has been initialised
 }
 
+void generateFunctionAssignment(char *c)
+{
+	varEntry *assignVar = varTable.lookup(c); //check if the variable to which assign to was declared
+		
+	if(assignVar == NULL)          //if the variable has not been declared
+	{
+		string err("Undeclared variable '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}	
+			
+	out << "\tLDR R12, =0x" << hex << assignVar->location << endl; //load to R12 the address of the variable
+	assignAddress = assignVar->location;			//save the address of the most recently assigned variable, used in for loop
+	out << "\tSTR R6, [R12]" << endl;	 //after data processing, store the variable in memory, the value returned by function was in R6
+	
+	assignVar->initialised = true;		//flag that the variable has been initialised
+}
+
 void generateArrayAssignment(char *c)
 {
 	varEntry *assignVar = varTable.lookup(c); //check if the variable to which assign to was declared
@@ -609,6 +669,39 @@ void generateArrayAssignment(char *c)
 	}
 }
 
+void generateArrayFunctionAssignment(char *c)
+{
+	varEntry *assignVar = varTable.lookup(c); //check if the variable to which assign to was declared
+		
+	if(assignVar == NULL)          //if the variable has not been declared
+	{
+		string err("Undeclared array '");
+		err.append(c); err.append("'");
+		yyerror(err.c_str());
+	}
+	else
+	{
+		if(assignVar->arr == false)
+		{
+			string err("Not an array '");
+			err.append(c); err.append("'");
+			yyerror(err.c_str());
+		}
+		else
+		{
+			out << "\tMOV R0, #0x0" << endl;
+			out << varIndexString.str();
+			varIndexString.str(string());
+			out << "\tLDR R12, =0x" << hex << assignVar->location << endl; //load to R12 the address of the variable
+			out << "\tSUB R0, R0, #0x" << hex << assignVar->startindex << endl; //subtract the startindex from the calculated expression in square brackets
+			out << "\tMOV R8, #0x4" << endl; 
+			out << "\tMOV R7, R0" << endl;
+			out << "\tMUL R0, R7, R8" << endl; //multiply the offset by 4
+			out << "\tSTR R6, [R12, R0]" << endl;	 //after data processing, store the function result fom R6 in memory	
+		}
+	}
+}
+
 void generateCompare(char *c, int i)
 {
 	out << "\tMOV R0, #0x0" << endl; //reset the register for evaluating the expression in the buffer
@@ -619,9 +712,6 @@ void generateCompare(char *c, int i)
 
 	if(testVar != NULL) //check if the variable which is being compared has been declared
 	{
-		if(testVar->initialised == false) //if the variable on the LHS has not been initialised, display a warning
-			cout << "Warning: Uninitialised variable '" << testVar->id << "', line: " << lineno << endl;
-
 		out << "\tLDR R12, =0x" << hex << testVar->location << endl;
 		out << "\tLDR R2, [R12]" << endl; //load the variable to R2
 	}				
@@ -670,23 +760,45 @@ void procedureDeclaration(char *p)
 		procTable.addProcedure(p);
 	else				  //if the procedure has been already declared, terminate
 	{
-		string err("Redeclared procedure '");
+		string err("Redeclared function/procedure '");
 		err.append(p); err.append("'");
 		yyerror(err.c_str());
 	}
 
-	procEntry *temp = procTable.lookup(p);
+	procEntry *procPointer = procTable.lookup(p);
 
-	for(int i = 0; i < var_idents.size(); i++)
+	for(int i = 0; i < var_idents.size(); i++) //add all arguments to the appropriate entry in the proc table
 	{
 		addVar(var_idents[i]);
 		varEntry *varTemp = varTable.lookup(var_idents[i]);
-		procTable.addArgToProc(temp, varTemp);
+		procTable.addArgs(procPointer, varTemp);
 		delete[] var_idents[i];
 	}
-				
-	out << p << endl;
-	out << "\tSTMED r13!, {r0-r12, r14}" << endl << endl;
+}
+
+void functionDeclaration(char *p)
+{
+	if(procTable.lookup(p) == NULL)    //check if the procedure has not been declared already
+	{
+		procTable.addFunction(p);	
+		addVar(p); //this variable is holds the return value from the function
+	}	
+	else				  //if the procedure has been already declared, terminate
+	{
+		string err("Redeclared function/procedure '");
+		err.append(p); err.append("'");
+		yyerror(err.c_str());
+	}
+
+	procEntry *funcPointer = procTable.lookup(p);
+
+	for(int i = 0; i < var_idents.size(); i++) //add all arguments to the appropriate entry in the proc table
+	{
+		addVar(var_idents[i]);
+		varEntry *varTemp = varTable.lookup(var_idents[i]);
+		procTable.addArgs(funcPointer, varTemp);
+		delete[] var_idents[i];
+	}
 }
 
 void procedureCall(char *p)
@@ -701,53 +813,132 @@ void procedureCall(char *p)
 	}
 	else
 	{
-		if(procCall->arg_no != var_idents.size()) //if the number of arguments passed to the procedure is invalid
+		if(procCall->function == true)
 		{
-			char size[5];
-			sprintf(size, "%d", (int)var_idents.size());
-			string err("Bad procedure call. Procedure '");
-			err.append(p); err.append("' does not take "); err.append(size); err.append(" arguments");
+			string err("'"); err.append(p);
+			err.append("' is a function, not a procedure. Use in an assignment statement. ");
 			yyerror(err.c_str());
 		}
 		else
 		{
-			for(int i = 0; i < var_idents.size(); i++) //for each arguments which needs to be passed to the procedure
+			if(procCall->arg_no != var_idents.size()) //if the number of arguments passed to the procedure is invalid
 			{
-				varEntry *procVar = procTable.getVar(procCall, i); //get the local variable in the procedure
-				if(var_idents[i][0] < 0x30 || var_idents[i][0] > 0x39) /* if the first char is NOT a digit (any ascii char in range between 0x30 and 0x39)
-											* we know that the whole thing is for sure not a variable */
+				char size[5];
+				sprintf(size, "%d", (int)var_idents.size());
+				string err("Bad procedure call. Procedure '");
+				err.append(p); err.append("' does not take "); err.append(size); err.append(" arguments");
+				yyerror(err.c_str());
+			}
+			else
+			{
+				for(int i = 0; i < var_idents.size(); i++) //for each arguments which needs to be passed to the procedure
 				{
-					varEntry *argVar = varTable.lookup(var_idents[i]); //load the variable which has to be passed to the procedure
-
-					if(argVar != NULL) //check if the variable has been declared
+					varEntry *procVar = procTable.getVar(procCall, i); //get the local variable in the procedure
+					if(var_idents[i][0] < 0x30 || var_idents[i][0] > 0x39) /* if the first char is NOT a digit (any ascii char in range between 0x30 and 0x39)
+												* we know that the whole thing is for sure not a variable */
 					{
-						if(argVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
-							cout << "Warning: Uninitialised variable '" << argVar->id << "', line: " << lineno << endl;
+						varEntry *argVar = varTable.lookup(var_idents[i]); //load the variable which has to be passed to the procedure
 
-						out << "\tLDR R12, =0x" << hex << argVar->location << endl;
-					}				
-					else                          //if the variable has not been declared, terminate and display error
+						if(argVar != NULL) //check if the variable has been declared
+						{
+							out << "\tLDR R12, =0x" << hex << argVar->location << endl;
+						}				
+						else                          //if the variable has not been declared, terminate and display error
+						{
+							string err("Undeclared variable '");
+							err.append(var_idents[i]); err.append("'");
+							yyerror(err.c_str());
+						}
+
+						out << "\tLDR R0, [R12]" << endl;
+						out << "\tLDR R12, =0x" << hex << procVar->location << endl;
+						out << "\tSTR R0, [R12]" << endl;
+					}
+					else
 					{
-						string err("Undeclared variable '");
-						err.append(var_idents[i]); err.append("'");
-						yyerror(err.c_str());
+						int literal = atoi(var_idents[i]);
+						out << "\tMOV R0, #0x" << hex << literal << endl;
+						out << "\tLDR R12, =0x" << hex << procVar->location << endl;
+						out << "\tSTR R0, [R12]" << endl;
 					}
 
-					out << "\tLDR R0, [R12]" << endl;
-					out << "\tLDR R12, =0x" << hex << procVar->location << endl;
-					out << "\tSTR R0, [R12]" << endl;
+						delete[] var_idents[i];
 				}
-				else
-				{
-					int literal = atoi(var_idents[i]);
-					out << "\tMOV R0, #0x" << hex << literal << endl;
-					out << "\tLDR R12, =0x" << hex << procVar->location << endl;
-					out << "\tSTR R0, [R12]" << endl;
-				}
-
-					delete[] var_idents[i];
+				out << "\tBL " << p << endl;
 			}
-			out << "\tBL " << p << endl;
+		}
+	}
+
+	var_idents.clear();
+}
+
+void functionCall(char *p)
+{
+	procEntry *procCall = procTable.lookup(p);
+
+	if(procCall == NULL) //if the procedure with such name does not exist
+	{
+		string err("Undeclared function '");
+		err.append(p); err.append("'");
+		yyerror(err.c_str());
+	}
+	else
+	{
+		if(procCall->function == false)
+		{
+			string err("'"); err.append(p);
+			err.append("' is a procedure, not a function. Use outside an assignment statement. ");
+			yyerror(err.c_str());
+		}
+		else
+		{
+			if(procCall->arg_no != var_idents.size()) //if the number of arguments passed to the procedure is invalid
+			{
+				char size[5];
+				sprintf(size, "%d", (int)var_idents.size());
+				string err("Bad function call. Function '");
+				err.append(p); err.append("' does not take "); err.append(size); err.append(" arguments");
+				yyerror(err.c_str());
+			}
+			else
+			{
+				for(int i = 0; i < var_idents.size(); i++) //for each arguments which needs to be passed to the procedure
+				{
+					varEntry *procVar = procTable.getVar(procCall, i); //get the local variable in the procedure
+					if(var_idents[i][0] < 0x30 || var_idents[i][0] > 0x39) /* if the first char is NOT a digit (any ascii char in range between 0x30 and 0x39)
+												* we know that the whole thing is for sure not a variable */
+					{
+						varEntry *argVar = varTable.lookup(var_idents[i]); //load the variable which has to be passed to the procedure
+
+						if(argVar != NULL) //check if the variable has been declared
+						{
+							out << "\tLDR R12, =0x" << hex << argVar->location << endl;
+						}				
+						else                          //if the variable has not been declared, terminate and display error
+						{
+							string err("Undeclared variable '");
+							err.append(var_idents[i]); err.append("'");
+							yyerror(err.c_str());
+						}
+
+						out << "\tLDR R0, [R12]" << endl;
+						out << "\tLDR R12, =0x" << hex << procVar->location << endl;
+						out << "\tSTR R0, [R12]" << endl;
+					}
+					else
+					{
+						int literal = atoi(var_idents[i]);
+						out << "\tMOV R0, #0x" << hex << literal << endl;
+						out << "\tLDR R12, =0x" << hex << procVar->location << endl;
+						out << "\tSTR R0, [R12]" << endl;
+					}
+
+						delete[] var_idents[i];
+				}
+				out << "\tBL " << p << endl;
+				out << "\tLDR R12, =0x" << hex << varTable.lookup(p)->location << endl;
+				out << "\tLDR R6, [R12]" << endl;
+			}
 		}
 	}
 
@@ -760,9 +951,6 @@ void loadExprVar(char *c, int reg)
 
 	if(currentVar != NULL) //if the variable which is on the RHS was declared:
 	{
-		if(currentVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
-			cout << "Warning: Uninitialised variable '" << currentVar->id << "', line: " << lineno << endl;
-	
 		assignStream << "\tLDR R12, =0x" << hex << currentVar->location << endl;
 		assignStream << "\tLDR R" << reg << ", [R12]" << endl;
 	}
@@ -780,9 +968,6 @@ void loadReadWriteVar(char *c, bool write)
 
 	if(ioVar != NULL)
 	{
-		if(write == true && ioVar->initialised == false) //if the variable on the RHS has not been initialised, display a warning
-			cout << "Warning: Uninitialised variable '" << ioVar->id << "', line: " << lineno << endl;
-
 		out << "\tLDR R12, =0x" << hex << ioVar->location << endl;
 	}				
 	else                          //if the variable has not been declared, terminate and display error
