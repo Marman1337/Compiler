@@ -105,7 +105,7 @@ program_header		: PROGRAM IDENTIFIER SEMICOLON
 			};
 
 /* finds variable declarations and updates the symbol table (varTable.cpp) with appropriate entries */
-var_declarations	: 
+var_declarations	: /* no variable declarations */
 			| VAR var_list;
 
 var_list		: var_list var_line
@@ -1216,7 +1216,7 @@ void writeHeaders()
 
 	out << "READR3_				;entry point" << endl << endl;
 
-	out << "\tSTMED r13!,{r0,r1,r2,r14}	;push current registers onto the stack" << endl << endl;
+	out << "\tSTMED r13!,{r0,r1,r2,r10,r14}	;push current registers onto the stack" << endl << endl;
 
 	out << "\tMOV R3, #0x0		;initialise the output register" << endl;
 	out << "\tMOV R1, #0x0		;this is essentially a boolean value, 0 correcponds to positive number, 1 to negative" << endl;
@@ -1249,13 +1249,13 @@ void writeHeaders()
 	out << "\tCMP R1, #0x1		;if the first chracter was a minus" << endl;
 	out << "\tRSBEQ R3, R3, #0x0	;get the negative value of R3" << endl << endl;
 	
-	out << "\tLDMED r13!,{r0,r1,r2,r15}  ;pop values from the stack and return" << endl << endl << endl;
+	out << "\tLDMED r13!,{r0,r1,r2,r10,r15}  ;pop values from the stack and return" << endl << endl << endl;
 
 	out << "; Subroutine to divide R2 by R3 and put the result in R1" << endl;
 	out << "; -------------------------------------------------------------------------------" << endl;
 	out << "; We keep subtracting R3 from R2 until we reach 0 or negative value" << endl;
 	out << "; With each subtraction that does not yield in 0 or negative value in R2" << endl;
-	out << "; we increment R0 which is the output of the subroutine." << endl;
+	out << "; we increment R1 which is the output of the subroutine." << endl;
 	out << "; The subroutine also handles all combinations of positive/negative" << endl;
 	out << "; division. Ie x/y, x/(-y), (-x)/y and (-x)/(-y) all yield in correct result." << endl;
 	out << "; Comments next to each instruction explain how the subroutine works in detail." << endl << endl;
