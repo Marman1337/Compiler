@@ -1,6 +1,6 @@
 program sample1;
-var 	A : integer;
+var A : integer;
 begin
-	A := 3+4+5+7-7;
-	
+   A := 1;
+   write(A);
 end.

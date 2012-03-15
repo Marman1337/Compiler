@@ -1201,17 +1201,17 @@ void writeHeaders()
 
 	out << "printEnd			;end" << endl;
 
-	out << "\tLDMED r13!,{r0-r4,r15} 	;return" << endl << endl << endl;
+	out << "\tLDMED r13!,{r0-r4,r15} 	;return" << endl << endl;
 
-	out << "; Subroutine to read a reasonably large positive decimal number to R3" << endl;
+	out << "; Subroutine to read any reasonable large decimal number to R3 " << endl;
 	out << "; -------------------------------------------------------------------------------" << endl;
 	out << "; The idea is simple:" << endl;
 	out << "; Keep reading new characters until newline character has been read." << endl;
 	out << "; In order to produce meaningful results, the characters are assumed to be digits." << endl;
 	out << "; Other characters are however acceptable, yet their value will correspond to the" << endl;
 	out << "; ASCII value associated with a given character." << endl;
-	out << "; Due to ARM registers being 32-bits wide, trying to enter any number bigger than" << endl;
-	out << "; 0xFFFFFFFF (0d 4 294 967 295) will generate overflow and by consequence" << endl;
+	out << "; Due to ARM registers being 32-bits wide, trying to enter any number outside" << endl;
+	out << "; the 32-bit signed range will generate overflow and by consequence " << endl;
 	out << "; garbage output of the subroutine." << endl << endl;
 
 	out << "READR3_				;entry point" << endl << endl;
