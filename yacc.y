@@ -163,6 +163,7 @@ proc_declaration	: PROCEDURE IDENTIFIER arguments SEMICOLON
 			var_declarations block SEMICOLON
 			{
 				out << endl << "\tLDMED r13!, {r0-r12, r15}" << endl;
+				out << "\tLTORG" << endl << endl;
 			};
 
 func_declaration	: FUNCTION IDENTIFIER arguments COLON var_type SEMICOLON
@@ -177,6 +178,7 @@ func_declaration	: FUNCTION IDENTIFIER arguments COLON var_type SEMICOLON
 			var_declarations block SEMICOLON
 			{
 				out << endl << "\tLDMED r13!, {r0-r12, r15}" << endl;
+				out << "\tLTORG" << endl << endl;
 			};
 
 arguments		: /* no arguments */
