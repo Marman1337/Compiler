@@ -143,8 +143,11 @@ var_identifiers		: IDENTIFIER
 var_type		: INT;
 
 /* declarations of functions and procedures */
-proc_func_declarations	: proc_func_declarations proc_declaration
-			| proc_func_declarations func_declaration
+proc_func_declarations	: /* no declarations */
+			| non_empty_declarations;
+
+non_empty_declarations	: non_empty_declarations proc_declaration
+			| non_empty_declarations func_declaration
 			| proc_declaration
 			| func_declaration;
 
