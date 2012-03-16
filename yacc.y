@@ -113,7 +113,7 @@ var_list		: var_list var_line
 
 var_line		: var_identifiers COLON var_type SEMICOLON
 			{
-				for(int i = 0; i < var_idents.size(); i++)
+				for(int i = 0; i < var_idents.size(); i++) //parse variables and add them to the symbol table
 				{
 					addVar(var_idents[i]);
 					delete[] var_idents[i];
@@ -122,7 +122,7 @@ var_line		: var_identifiers COLON var_type SEMICOLON
 			}
 			| var_identifiers COLON ARRAY OSQPAREN NUMBER DOTDOT NUMBER CSQPAREN OF var_type SEMICOLON
 			{
-				for(int i = 0; i < var_idents.size(); i++)
+				for(int i = 0; i < var_idents.size(); i++) //add arrays to the symbol table
 				{
 					addArr(var_idents[i], atoi($5.id), atoi($7.id));
 					delete[] var_idents[i];
@@ -153,7 +153,7 @@ non_empty_declarations	: non_empty_declarations proc_declaration
 
 proc_declaration	: PROCEDURE IDENTIFIER arguments SEMICOLON
 			{
-				procedureDeclaration($2.id);
+				procedureDeclaration($2.id); //process the declaration of a procedure
 				out << $2.id << endl;
 				out << "\tSTMED r13!, {r0-r12, r14}" << endl << endl;
 
@@ -168,7 +168,7 @@ proc_declaration	: PROCEDURE IDENTIFIER arguments SEMICOLON
 
 func_declaration	: FUNCTION IDENTIFIER arguments COLON var_type SEMICOLON
 			{
-				functionDeclaration($2.id);
+				functionDeclaration($2.id); //process the declaration of a function
 				out << $2.id << endl;
 				out << "\tSTMED r13!, {r0-r12, r14}" << endl << endl;
 
@@ -650,7 +650,7 @@ void generateArrayAssignment(char *c)
 	}
 	else
 	{
-		if(assignVar->arr == false)
+		if(assignVar->arr == false) //if it is not an array
 		{
 			string err("Not an array '");
 			err.append(c); err.append("'");
@@ -686,7 +686,7 @@ void generateArrayFunctionAssignment(char *c)
 	}
 	else
 	{
-		if(assignVar->arr == false)
+		if(assignVar->arr == false) //if it is not an array
 		{
 			string err("Not an array '");
 			err.append(c); err.append("'");
@@ -818,7 +818,7 @@ void procedureCall(char *p)
 	}
 	else
 	{
-		if(procCall->function == true)
+		if(procCall->function == true) //if it is a function, not a procedure
 		{
 			string err("'"); err.append(p);
 			err.append("' is a function, not a procedure. Use in an assignment statement. ");
@@ -889,7 +889,7 @@ void functionCall(char *p)
 	}
 	else
 	{
-		if(procCall->function == false)
+		if(procCall->function == false) //if it is a procedure, not a function
 		{
 			string err("'"); err.append(p);
 			err.append("' is a procedure, not a function. Use outside an assignment statement. ");
