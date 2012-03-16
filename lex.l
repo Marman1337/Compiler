@@ -26,9 +26,9 @@ int lineno = 1;
 (PROCEDURE|procedure)		{return PROCEDURE;}
 (FUNCTION|function)		{return FUNCTION;}
 (INTEGER|integer)		{return INT;}
-(write)				{return WRITE;}
-(writeln)			{return WRITELN;}
-(read)				{return READ;}
+(WRITE|write)			{return WRITE;}
+(WRITELN|writeln)		{return WRITELN;}
+(READ|read)			{return READ;}
 "+"				{return PLUS;}
 "-"				{return MINUS;}
 "*"				{return MUL;}
