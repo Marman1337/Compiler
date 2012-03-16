@@ -4,5 +4,5 @@ begin
    A:=1;
    B:=0;
    if A=1 then B:=1;
-   write(B);
+   writeln(B);
 end.

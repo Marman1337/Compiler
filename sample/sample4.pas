@@ -4,8 +4,8 @@ begin
    B:=4;
    for A := 1 to 10 do
       begin
-	 write(A);
+	 writeln(A);
 	 B := B + 1;
       end;
-   write(B);
+   writeln(B);
 end.

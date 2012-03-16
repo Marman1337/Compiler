@@ -5,8 +5,8 @@ begin
    B:=4;
    while (A < B) do
       begin
-	 write(A);
+	 writeln(A);
 	 A := A + 1;
       end;
-   write(B);
+   writeln(B);
 end.

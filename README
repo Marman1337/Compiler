@@ -1,0 +1,15 @@
+This is a Pascal -> ARM compiler.
+
+Written by Marcin Baginski (mgb10) as a part of the Language Processors
+course at Imperial College London.
+
+User's manual:
+1. Compile under Linux environment using 'make' command.
+2. Type 'make sweep' to remove redundant files.
+3. Use by executing the command:
+	./ARM_mgb10 PATH_TO_INPUT_FILE_NAME < PATH_TO_OUTPUT_FILE_NAME
+The output (ARM assembly) will be generated to the specified file.
+
+Alretnarively, type:
+	./ARM_mgb10
+to view the welcome message.

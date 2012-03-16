@@ -9,6 +9,6 @@ begin
           myarray[index]:= index;
 
    for index := 1 to 5 do
-          write(myarray[index]);
+          writeln(myarray[index]);
    
 end.

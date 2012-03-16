@@ -10,5 +10,5 @@ function incr(X: integer):integer;
 begin
    A:=1;
    B:=incr(A);
-   write(B);
+   writeln(B);
 end.
