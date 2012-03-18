@@ -1,10 +1,10 @@
 program alll;
 
-var
+var				(* global variables *)
 	a,b,c,index :  integer;
 	fiboarr : array [1..10] of integer;
 
-function fibo(no: integer) : integer;
+function fibo(no: integer) : integer; (* function which returns n-th Fibonacci number *)
 var fn1, fn2, temp, i : integer;
 begin
 	if no = 1 then fibo := 0
@@ -25,7 +25,7 @@ begin
 	end;
 end;
 
-procedure fiboprint(n : integer);
+procedure fiboprint(n : integer);	(* procedure which prints n Fibonacci numbers *)
 var f1, f2, tmp, j : integer;
 begin
 	if n >= 1 then writeln('Fibo 0: 0');
@@ -54,23 +54,16 @@ begin
 	c := a*b;   writeln(a, ' * ', b, ' = ', c);
 	c := a/b;   writeln(a, ' / ', b, ' = ', c);
 
-	writeln('Fine, now, how many fibo numbers do you want me to print?: '); read(a);
-	fiboprint(a);
-	writeln('OK. Now try with another number: '); read(a);
-	fiboprint(a);
+	writeln('Fine, now, how many fibo numbers do you want print?: '); read(a); fiboprint(a);
+	writeln('OK. Now try with another number: '); read(a); fiboprint(a);
 	
 	writeln('Done. Type any number to continue: '); read(a);
 
 	writeln('Now lets populate the fiboarr[1..10] array');
 	writeln('with fibonacci numbers using the fibo function');
-
 	writeln('Generating fibonacci numbers...');
-
-	for index := 1 to 10 do	fiboarr[index] := fibo(index);
+	for index := 1 to 10 do	fiboarr[index] := fibo(index); (* populate the array with Fibonacci numbers *)
 
 	writeln('Done. Lets now print the entire array.'); writeln(' ');
-
-	for index := 1 to 10 do	writeln('fiboarr[', index, '] = ', fiboarr[index]);
-
-	writeln(' '); writeln('Thank you. Enter 0 to terminate. Otherwise do it all over again: '); read(a);
+	for index := 1 to 10 do	writeln('fiboarr[', index, '] = ', fiboarr[index]); (* print the contents of the array *)
 end.
