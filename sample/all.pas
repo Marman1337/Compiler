@@ -47,40 +47,30 @@ begin
 end;
 
 begin
-	a := 1;
-	while a <> 0 do
-	begin	
-		write('Lets demonstrate arithmetic. Enter the first number: '); read(a);
-		write('Good. Enter the second number: '); read(b);
-		c := a+b;
-		writeln(a, ' + ', b, ' = ', c);
-		c := a-b;
-		writeln(a, ' - ', b, ' = ', c);
-		c := a*b;
-		writeln(a, ' * ', b, ' = ', c);
-		c := a/b;
-		writeln(a, ' / ', b, ' = ', c);
+	write('Lets demonstrate arithmetic. Enter the first number: '); read(a);
+	write('Good. Enter the second number: '); read(b);
+	c := a+b;   writeln(a, ' + ', b, ' = ', c);
+	c := a-b;   writeln(a, ' - ', b, ' = ', c);
+	c := a*b;   writeln(a, ' * ', b, ' = ', c);
+	c := a/b;   writeln(a, ' / ', b, ' = ', c);
 
-		writeln(' '); writeln('Fine, now, how many fibo numbers do you want me to print?: '); read(a);
-		fiboprint(a);
-		writeln('OK. Now try with another number: '); read(a);
-		fiboprint(a);
+	writeln('Fine, now, how many fibo numbers do you want me to print?: '); read(a);
+	fiboprint(a);
+	writeln('OK. Now try with another number: '); read(a);
+	fiboprint(a);
 	
-		writeln('Done. Type any number to continue: '); read(a);
+	writeln('Done. Type any number to continue: '); read(a);
 
-		writeln(' '); writeln('Now lets populate the fiboarr[1..10] array');
-			      writeln('with fibonacci numbers using the fibo function');
+	writeln('Now lets populate the fiboarr[1..10] array');
+	writeln('with fibonacci numbers using the fibo function');
 
-		writeln('Generating fibonacci numbers...');
+	writeln('Generating fibonacci numbers...');
 
-		for index := 1 to 10 do
-			fiboarr[index] := fibo(index);
+	for index := 1 to 10 do	fiboarr[index] := fibo(index);
 
-		writeln('Done. Lets now print the entire array.'); writeln(' ');
+	writeln('Done. Lets now print the entire array.'); writeln(' ');
 
-		for index := 1 to 10 do
-			writeln('fiboarr[', index, '] = ', fiboarr[index]);
+	for index := 1 to 10 do	writeln('fiboarr[', index, '] = ', fiboarr[index]);
 
-		writeln(' '); writeln('Thank you. Enter 0 to terminate. Otherwise do it all over again: '); read(a);
-	end;
+	writeln(' '); writeln('Thank you. Enter 0 to terminate. Otherwise do it all over again: '); read(a);
 end.
